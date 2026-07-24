@@ -1,98 +1,63 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# Dlander backend
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+Production-oriented NestJS authentication and user-management API backed by PostgreSQL and Prisma. This service intentionally does not persist canvas, scene, template, Excalidraw, browser-cache, payment, credit, or AI-request data.
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+## Setup
 
-## Description
-
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
-
-## Project setup
+Copy `.env.example` to `.env`, replace both JWT secrets with different cryptographically random values of at least 32 characters, create the PostgreSQL database, then run:
 
 ```bash
-$ npm install
+npm install
+npx prisma generate
+npx prisma migrate deploy
+npm run start:dev
 ```
 
-## Compile and run the project
+Required settings are `DATABASE_URL`, `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, `JWT_ACCESS_EXPIRES_IN`, `JWT_REFRESH_EXPIRES_IN`, `EMAIL_VERIFICATION_EXPIRES_IN`, `PASSWORD_RESET_EXPIRES_IN`, and `FRONTEND_URL`. `CORS_ORIGINS` is a comma-separated allowlist. See `.env.example` for SMTP, port, cookie, and transport options.
+
+## Authentication flows
+
+- Registration (`POST /api/v1/auth/register`) normalizes email, hashes the password with Argon2id, creates a pending user and a hashed one-time verification token, and emails the raw token link.
+- Verification and resend use `/verify-email` and `/resend-verification`. Reissue invalidates older tokens and both endpoints are throttled.
+- Login creates one independent database session and returns a short-lived access JWT plus rotating refresh JWT. Access authentication checks the user status and session revocation on every request.
+- Refresh (`POST /api/v1/auth/refresh`) verifies the refresh JWT, checks its Argon2 hash, and atomically replaces it under a serializable transaction. A mismatch revokes the session as reuse detection.
+- Logout revokes the current session; logout-all revokes every active user session.
+- Forgot-password always returns the same response. Reset tokens are hashed, expiring, one-use values; a successful reset atomically changes the password and revokes all sessions.
+- Change-password keeps the current session and revokes all other sessions. This avoids unexpectedly signing out the initiating device while limiting stolen-session persistence.
+
+All protected endpoints use `Authorization: Bearer <access-token>`.
+
+## Refresh-token transport
+
+Set `AUTH_REFRESH_TOKEN_TRANSPORT=body` for development clients. The refresh token is then returned in JSON and supplied as `refreshToken` to `/refresh`; this is convenient but exposes it to JavaScript and therefore XSS.
+
+Set it to `cookie` in production. The API places the token in a `Secure`, `HttpOnly`, `SameSite=Strict` cookie scoped to `/api/v1/auth` and omits it from JSON. Cookie mode requires HTTPS. Keep the CORS allowlist narrow and use credentialed requests. SameSite strict is the primary CSRF control for this deployment model.
+
+## Users, sessions, and roles
+
+`GET/PATCH/DELETE /api/v1/users/me` reads, updates the display name, or soft-deletes the account. Deletion preserves records and revokes all sessions. `/api/v1/users/me/sessions` lists active sessions without hashes and marks the current one; an individual owned session can be revoked by ID.
+
+`ADMIN` and `SUPER_ADMIN` may search/page through `/api/v1/admin/users`, inspect a user, and block/unblock accounts. `ADMIN` cannot modify `SUPER_ADMIN`; administrators cannot block themselves. Block revokes sessions. Administrative mutations call the audit abstraction and currently emit structured audit log events.
+
+## Development email
+
+The mail abstraction sends through SMTP. Start Mailpit on ports 1025 (SMTP) and 8025 (web UI), retain the `.env.example` SMTP defaults, and view messages at `http://localhost:8025`. Production should supply authenticated TLS SMTP configuration.
+
+## API and tests
+
+Swagger UI is at `http://localhost:3000/api/docs`; its OpenAPI document is available at `/api/docs-json`.
 
 ```bash
-# development
-$ npm run start
-
-# watch mode
-$ npm run start:dev
-
-# production mode
-$ npm run start:prod
+npm run lint
+npm test
+npm run test:e2e
+npm run build
+npx prisma validate
+npx prisma migrate status
 ```
 
-## Run tests
+Integration tests that exercise PostgreSQL should use a dedicated PostgreSQL `DATABASE_URL`; SQLite is not supported. The migration is committed under `prisma/migrations`.
 
-```bash
-# unit tests
-$ npm run test
+## Security decisions
 
-# e2e tests
-$ npm run test:e2e
-
-# test coverage
-$ npm run test:cov
-```
-
-## Deployment
-
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
-
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
-
-```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
-```
-
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
-
-## Resources
-
-Check out a few resources that may come in handy when working with NestJS:
-
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
-
-## Support
-
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
-
-## Stay in touch
-
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
-
-## License
-
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+Passwords and refresh tokens use Argon2; one-time email/reset tokens use SHA-256 because they contain 256 bits of randomness and are compared by exact indexed digest. DTO payloads are transformed, whitelisted, and reject extra fields. Authentication failures avoid credential enumeration, secrets/hashes are never serialized, sensitive endpoints are throttled, CORS is allowlisted, Helmet is enabled, and the API uses consistent `{ data, meta }` success envelopes and `{ error, meta }` failures. Authentication request bodies are not logged.
