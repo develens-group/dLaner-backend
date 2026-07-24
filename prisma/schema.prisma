@@ -47,6 +47,45 @@ enum AiOperation {
   CUSTOM
 }
 
+enum CreditLedgerType {
+  PURCHASE
+  ADMIN_GRANT
+  ADMIN_DEDUCTION
+  RESERVATION
+  RESERVATION_CAPTURE
+  RESERVATION_RELEASE
+  CONSUMPTION
+  REFUND
+  EXPIRATION
+  REVERSAL
+  PROMOTION
+}
+
+enum CreditReservationStatus {
+  ACTIVE
+  CAPTURED
+  RELEASED
+  EXPIRED
+}
+
+enum CreditOrderStatus {
+  CREATED
+  PENDING_PAYMENT
+  PAID
+  FAILED
+  CANCELLED
+  EXPIRED
+  REFUNDED
+}
+
+enum PaymentAttemptStatus {
+  CREATED
+  PENDING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+}
+
 model User {
   id                String                   @id @default(uuid()) @db.Uuid
   email             String                   @unique @db.VarChar(320)
@@ -65,6 +104,11 @@ model User {
   apiRequests       ApiRequestRecord[]
   aiRequests        AiRequest[]
   auditLogs         AuditLog[]                @relation("AuditActor")
+  creditAccount     CreditAccount?
+  creditLedger      CreditLedgerEntry[]       @relation("LedgerOwner")
+  createdCreditLedger CreditLedgerEntry[]     @relation("LedgerCreator")
+  creditReservations CreditReservation[]
+  creditOrders      CreditPurchaseOrder[]
 
   @@index([status])
   @@index([createdAt])
@@ -125,8 +169,11 @@ model AiRequest {
   promptTokens           Int?
   completionTokens       Int?
   totalTokens            Int?
-  estimatedCreditCost    Decimal?        @db.Decimal(18, 6)
-  chargedCreditAmount    Decimal?        @db.Decimal(18, 6)
+  estimatedCreditCost    Int?
+  chargedCreditAmount    Int?
+  creditReservationId   String?         @db.Uuid
+  actualCreditCost      Int?
+  creditChargedAt       DateTime?
   latencyMs              Int?
   errorCode              String?         @db.VarChar(100)
   errorMessage           String?         @db.VarChar(500)
@@ -135,12 +182,178 @@ model AiRequest {
   createdAt              DateTime        @default(now())
   updatedAt              DateTime        @updatedAt
   user                   User            @relation(fields: [userId], references: [id], onDelete: Restrict)
+  creditReservation      CreditReservation? @relation(fields: [creditReservationId], references: [id], onDelete: SetNull)
 
   @@unique([userId, idempotencyKey])
   @@index([userId, createdAt])
   @@index([status, createdAt])
   @@index([provider, model, createdAt])
   @@index([requestId])
+  @@index([creditReservationId])
+}
+
+model CreditAccount {
+  id                String   @id @default(uuid()) @db.Uuid
+  userId            String   @unique @db.Uuid
+  availableBalance  Int      @default(0)
+  reservedBalance   Int      @default(0)
+  lifetimePurchased Int      @default(0)
+  lifetimeConsumed  Int      @default(0)
+  version           Int      @default(0)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  user              User     @relation(fields: [userId], references: [id], onDelete: Restrict)
+  ledgerEntries     CreditLedgerEntry[]
+  reservations      CreditReservation[]
+
+  @@index([createdAt])
+}
+
+model CreditLedgerEntry {
+  id                     String           @id @default(uuid()) @db.Uuid
+  accountId              String           @db.Uuid
+  userId                 String           @db.Uuid
+  type                   CreditLedgerType
+  amount                 Int
+  availableDelta         Int
+  reservedDelta          Int
+  availableBalanceAfter  Int
+  reservedBalanceAfter   Int
+  referenceType          String           @db.VarChar(100)
+  referenceId            String?          @db.VarChar(255)
+  idempotencyKey         String?          @db.VarChar(128)
+  requestHash            String?          @db.VarChar(64)
+  description            String?          @db.VarChar(500)
+  metadataJson           Json?
+  createdByUserId        String?          @db.Uuid
+  createdAt              DateTime         @default(now())
+  account                CreditAccount    @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  user                   User             @relation("LedgerOwner", fields: [userId], references: [id], onDelete: Restrict)
+  createdBy              User?            @relation("LedgerCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
+
+  @@unique([userId, type, idempotencyKey])
+  @@index([accountId, createdAt])
+  @@index([userId, createdAt])
+  @@index([referenceType, referenceId])
+  @@index([createdAt])
+}
+
+model CreditReservation {
+  id             String                  @id @default(uuid()) @db.Uuid
+  accountId      String                  @db.Uuid
+  userId         String                  @db.Uuid
+  amount         Int
+  capturedAmount Int                     @default(0)
+  status         CreditReservationStatus @default(ACTIVE)
+  referenceType  String                  @db.VarChar(100)
+  referenceId    String                  @db.VarChar(255)
+  idempotencyKey String                  @db.VarChar(128)
+  requestHash    String                  @db.VarChar(64)
+  expiresAt      DateTime?
+  capturedAt     DateTime?
+  releasedAt     DateTime?
+  createdAt      DateTime                @default(now())
+  updatedAt      DateTime                @updatedAt
+  account        CreditAccount           @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  user           User                    @relation(fields: [userId], references: [id], onDelete: Restrict)
+  aiRequests     AiRequest[]
+
+  @@unique([userId, idempotencyKey])
+  @@index([accountId, status])
+  @@index([userId, createdAt])
+  @@index([expiresAt, status])
+  @@index([referenceType, referenceId])
+}
+
+model CreditPackage {
+  id                   String                @id @default(uuid()) @db.Uuid
+  name                 String                @db.VarChar(150)
+  description          String?               @db.VarChar(1000)
+  creditAmount         Int
+  bonusCreditAmount    Int                   @default(0)
+  priceMinor           Int
+  currency             String                @db.VarChar(3)
+  isActive             Boolean               @default(true)
+  sortOrder            Int                   @default(0)
+  purchaseLimitPerUser Int?
+  startsAt             DateTime?
+  endsAt               DateTime?
+  metadataJson         Json?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  deletedAt            DateTime?
+  orders               CreditPurchaseOrder[]
+
+  @@index([isActive, sortOrder])
+  @@index([startsAt, endsAt])
+}
+
+model CreditPurchaseOrder {
+  id                 String            @id @default(uuid()) @db.Uuid
+  userId             String            @db.Uuid
+  packageId          String            @db.Uuid
+  status             CreditOrderStatus @default(CREATED)
+  creditAmount       Int
+  bonusCreditAmount  Int
+  totalCreditAmount  Int
+  priceMinor         Int
+  currency           String            @db.VarChar(3)
+  paymentProvider    String            @db.VarChar(100)
+  providerPaymentId  String?           @db.VarChar(255)
+  idempotencyKey     String            @db.VarChar(128)
+  requestHash        String            @db.VarChar(64)
+  paidAt             DateTime?
+  failedAt           DateTime?
+  cancelledAt        DateTime?
+  expiresAt          DateTime?
+  metadataJson       Json?
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+  user               User              @relation(fields: [userId], references: [id], onDelete: Restrict)
+  package            CreditPackage     @relation(fields: [packageId], references: [id], onDelete: Restrict)
+  paymentAttempts    PaymentAttempt[]
+
+  @@unique([userId, idempotencyKey])
+  @@index([userId, createdAt])
+  @@index([status, createdAt])
+  @@index([providerPaymentId])
+}
+
+model PaymentAttempt {
+  id                String               @id @default(uuid()) @db.Uuid
+  orderId           String               @db.Uuid
+  provider          String               @db.VarChar(100)
+  providerPaymentId String?              @db.VarChar(255)
+  status            PaymentAttemptStatus @default(CREATED)
+  amountMinor       Int
+  currency          String               @db.VarChar(3)
+  requestJson       Json?
+  responseJson      Json?
+  failureCode       String?              @db.VarChar(100)
+  failureMessage    String?              @db.VarChar(500)
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+  order             CreditPurchaseOrder  @relation(fields: [orderId], references: [id], onDelete: Restrict)
+
+  @@index([orderId, createdAt])
+  @@index([provider, providerPaymentId])
+}
+
+model PaymentWebhookEvent {
+  id              String   @id @default(uuid()) @db.Uuid
+  provider        String   @db.VarChar(100)
+  providerEventId String   @db.VarChar(255)
+  eventType       String   @db.VarChar(100)
+  signatureValid  Boolean
+  payloadHash     String   @db.VarChar(64)
+  payloadJson     Json?
+  processedAt     DateTime?
+  processingError String?  @db.VarChar(500)
+  createdAt       DateTime @default(now())
+
+  @@unique([provider, providerEventId])
+  @@index([createdAt])
+  @@index([processedAt])
 }
 
 model AuditLog {

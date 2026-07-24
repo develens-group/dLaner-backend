@@ -16,6 +16,7 @@ import { RolesGuard } from './common/roles.guard';
 import { RequestTrackingModule } from './request-tracking/request-tracking.module';
 import { RequestTrackingMiddleware } from './request-tracking/request-tracking.middleware';
 import { AiModule } from './ai/ai.module';
+import { CreditsModule } from './credits/credits.module';
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { AiModule } from './ai/ai.module';
     UsersModule,
     AdminModule,
     RequestTrackingModule,
+    CreditsModule,
     AiModule,
   ],
   controllers: [AppController],

@@ -15,6 +15,8 @@ import {
 import { AiExecutionResult, AiProviderError } from './ai-provider';
 import { AiProviderRegistry } from './ai-provider.registry';
 import { AiRequestQueryDto, CreateAiRequestDto } from './ai.dto';
+import { CreditService } from '../credits/credit.service';
+import { CreditCostCalculator } from '../credits/credit-cost-calculator';
 
 @Injectable()
 export class AiService {
@@ -22,6 +24,8 @@ export class AiService {
     private readonly prisma: PrismaService,
     private readonly providers: AiProviderRegistry,
     private readonly config: ConfigService,
+    private readonly credits: CreditService,
+    private readonly costs: CreditCostCalculator,
   ) {}
   async createAndExecute(
     userId: string,
@@ -44,6 +48,19 @@ export class AiService {
         return existing;
       }
     }
+    const chargingEnabled =
+      this.config.get('AI_CREDIT_CHARGING_ENABLED', 'true') === 'true';
+    const estimatedCreditCost = chargingEnabled ? this.costs.estimate(dto) : 0;
+    const operationKey = key ?? `ai:${inputHash}`;
+    const reservation = chargingEnabled
+      ? await this.credits.reserveCredits(
+          userId,
+          estimatedCreditCost,
+          `${operationKey}:reserve`,
+          'AI_REQUEST',
+          requestId ?? inputHash,
+        )
+      : undefined;
     const input = this.capture(dto.input, 'INPUT');
     const record = await this.prisma.aiRequest.create({
       data: {
@@ -60,6 +77,8 @@ export class AiService {
         inputRedacted: input.redacted,
         status: AiRequestStatus.QUEUED,
         startedAt: new Date(),
+        estimatedCreditCost,
+        creditReservationId: reservation?.id,
       },
     });
     await this.prisma.aiRequest.update({
@@ -75,8 +94,50 @@ export class AiService {
           input: dto.input,
         }),
       );
-      return this.complete(record.id, result, Date.now() - started);
+      const actualCreditCost = chargingEnabled
+        ? this.costs.actual(dto, result)
+        : 0;
+      if (reservation) {
+        try {
+          await this.credits.captureReservation(
+            userId,
+            reservation.id,
+            actualCreditCost,
+            `${operationKey}:capture`,
+          );
+        } catch {
+          await this.prisma.aiRequest.update({
+            where: { id: record.id },
+            data: {
+              status: AiRequestStatus.FAILED,
+              completedAt: new Date(),
+              errorCode: 'CREDIT_CAPTURE_FAILED',
+              errorMessage:
+                'Provider completed but credit capture requires reconciliation',
+            },
+          });
+          throw new ConflictException(
+            'AI result requires credit reconciliation',
+          );
+        }
+      }
+      return this.complete(
+        record.id,
+        result,
+        Date.now() - started,
+        actualCreditCost,
+      );
     } catch (error) {
+      if (
+        reservation &&
+        !(
+          error instanceof ConflictException &&
+          error.message.includes('reconciliation')
+        )
+      )
+        await this.credits
+          .releaseReservation(userId, reservation.id, `${operationKey}:release`)
+          .catch(() => undefined);
       const normalized = normalizeError(error);
       await this.prisma.aiRequest.update({
         where: { id: record.id },
@@ -193,6 +254,7 @@ export class AiService {
     id: string,
     result: AiExecutionResult,
     latencyMs: number,
+    actualCreditCost: number,
   ) {
     const output = this.capture(result.output, 'OUTPUT');
     return this.prisma.aiRequest.update({
@@ -209,6 +271,9 @@ export class AiService {
         promptTokens: result.usage?.promptTokens,
         completionTokens: result.usage?.completionTokens,
         totalTokens: result.usage?.totalTokens,
+        actualCreditCost,
+        chargedCreditAmount: actualCreditCost,
+        creditChargedAt: actualCreditCost > 0 ? new Date() : undefined,
       },
       select: safeAiSelect,
     });

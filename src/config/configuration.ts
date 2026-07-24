@@ -33,6 +33,20 @@ class Environment {
   @IsInt() @Min(256) AI_HISTORY_MAX_OUTPUT_BYTES = 32768;
   @IsInt() @Min(1) AI_HISTORY_RETENTION_DAYS = 90;
   @IsInt() @Min(100) AI_PROVIDER_TIMEOUT_MS = 30000;
+  @IsString() DEFAULT_CURRENCY = 'USD';
+  @IsInt() @Min(1) CREDIT_MAX_TRANSACTION_AMOUNT = 1000000000;
+  @IsInt() @Min(1) CREDIT_RESERVATION_TTL_SECONDS = 900;
+  @IsString() PAYMENT_PROVIDER = 'mock';
+  @IsString() PAYMENT_WEBHOOK_SECRET!: string;
+  @IsUrl({ require_tld: false }) PAYMENT_RETURN_URL!: string;
+  @IsUrl({ require_tld: false }) PAYMENT_CANCEL_URL!: string;
+  @IsIn(['true', 'false']) MOCK_PAYMENT_ENABLED = 'true';
+  @IsIn(['true', 'false']) AI_CREDIT_CHARGING_ENABLED = 'true';
+  @IsInt() @Min(0) AI_CREDIT_FIXED_COST = 1;
+  @IsInt() @Min(1) AI_CREDIT_INPUT_UNIT_BYTES = 4096;
+  @IsInt() @Min(0) AI_CREDIT_INPUT_UNIT_COST = 1;
+  @IsInt() @Min(1) AI_CREDIT_OUTPUT_UNIT_BYTES = 4096;
+  @IsInt() @Min(0) AI_CREDIT_OUTPUT_UNIT_COST = 0;
 }
 
 export function validateEnvironment(values: Record<string, unknown>) {
@@ -48,5 +62,9 @@ export function validateEnvironment(values: Record<string, unknown>) {
     throw new Error('JWT secrets must contain at least 32 characters');
   if (config.JWT_ACCESS_SECRET === config.JWT_REFRESH_SECRET)
     throw new Error('JWT access and refresh secrets must differ');
+  if (config.PAYMENT_WEBHOOK_SECRET.length < 32)
+    throw new Error(
+      'PAYMENT_WEBHOOK_SECRET must contain at least 32 characters',
+    );
   return config;
 }

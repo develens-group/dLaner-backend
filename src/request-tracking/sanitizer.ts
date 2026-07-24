@@ -16,6 +16,8 @@ const SENSITIVE = new Set([
   'paymenttoken',
   'cardnumber',
   'cvv',
+  'signature',
+  'webhooksignature',
 ]);
 const AUTH_EMAIL_ROUTES = new Set([
   '/api/v1/auth/register',

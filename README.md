@@ -1,6 +1,6 @@
 # Dlander backend
 
-Production-oriented NestJS authentication and user-management API backed by PostgreSQL and Prisma. This service intentionally does not persist canvas, scene, template, Excalidraw, browser-cache, payment, credit, or AI-request data.
+Production-oriented NestJS API backed by PostgreSQL and Prisma. It provides authentication, operational request history, AI execution history, and immutable-ledger credit accounting. It intentionally does not persist canvas, scene, template, Excalidraw, or browser-cache data.
 
 ## Setup
 
@@ -103,3 +103,79 @@ The `AiProvider` abstraction returns normalized output and optional usage. The b
 Send this to `POST /api/v1/ai/requests` with an optional `Idempotency-Key`. Users can list, inspect, and cancel only their own records. Cancellation succeeds only while CREATED or QUEUED. Use `simulateFailure: true` to test normalized provider failures.
 
 For troubleshooting, run `npx prisma validate`, `npx prisma migrate status`, `npm run retention:cleanup`, and `npm test -- --runInBand`. If `api_request_persistence_failed` appears, check PostgreSQL connectivity and buffer sizing.
+
+## Credits and payments
+
+Each user receives a `CreditAccount` lazily and idempotently on their first credit operation. Credits and monetary minor units are signed 32-bit integers; JavaScript floating point and BigInt serialization are not used. `CREDIT_MAX_TRANSACTION_AMOUNT` limits individual mutations below the database range.
+
+The account cache exposes:
+
+- `available`: immediately spendable credits
+- `reserved`: credits held for in-progress work
+- `total`: available plus reserved
+
+`CreditLedgerEntry` is the immutable financial source of truth. Every mutation creates a ledger entry in the same serializable PostgreSQL transaction as the optimistic-version account update. Balances cannot become negative. Ledger entries are never edited or deleted; refunds and reconciliation use compensating entries.
+
+```mermaid
+flowchart LR
+  Package[Credit package] --> Order[Snapshotted purchase order]
+  Order --> Attempt[Payment attempt]
+  Attempt --> Webhook[Signed provider webhook]
+  Webhook --> Verify[Server-side verification]
+  Verify --> Paid[Order PAID]
+  Paid --> Ledger[PURCHASE ledger entry]
+  Ledger --> Account[Versioned account cache]
+```
+
+Credit package values and price are always loaded from PostgreSQL and copied into the order. Client-supplied prices or credit amounts are ignored. The built-in `mock` payment provider creates development redirects, verifies its own payment identifiers, and requires an HMAC-SHA256 `X-Payment-Signature` over the stable payload hash. Disable it with `MOCK_PAYMENT_ENABLED=false`.
+
+Payment webhooks are sent to `POST /api/v1/payments/webhooks/mock`. Provider/event identity is unique, invalid signatures are recorded without payload secrets, duplicate processed events are acknowledged without charging again, and payment completion atomically updates the order, attempt, webhook, account, and PURCHASE ledger entry.
+
+### Idempotency scopes
+
+- Orders: user plus `Idempotency-Key`
+- Ledger operations: user plus ledger type plus idempotency key
+- Reservations: user plus idempotency key
+- Webhooks: provider plus provider event ID
+
+Stored request hashes reject reuse with different amounts or references. Financial operations use serializable transactions, conditional balance/version updates, unique constraints, and retries for PostgreSQL serialization conflicts.
+
+### AI credit flow
+
+```mermaid
+sequenceDiagram
+  participant User
+  participant AI
+  participant Credits
+  participant Provider
+  User->>AI: create request
+  AI->>Credits: estimate and reserve
+  Credits-->>AI: reservation
+  AI->>Provider: execute
+  Provider-->>AI: output and usage
+  AI->>Credits: capture actual cost
+  Credits->>Credits: release unused reservation
+  AI-->>User: completed history record
+```
+
+The configuration-backed `CreditCostCalculator` applies a fixed integer cost plus ceiling-rounded input/output units. Reservation happens before provider execution. Success captures actual cost and returns unused credits; non-billable failure releases the reservation. If a provider succeeds but credit capture fails, the reservation remains recoverable and the AI record is marked `CREDIT_CAPTURE_FAILED` for reconciliation.
+
+### Refunds and reconciliation
+
+Administrative purchase refunds must reference a paid order. The serializable refund operation sums prior refunds, rejects over-refunds, writes a compensating REFUND entry, and marks the order REFUNDED after a full refund. `/api/v1/admin/credit-accounts/:userId/reconcile` reports cached-versus-ledger balances without silently repairing them.
+
+User routes:
+
+- `/api/v1/credits/balance`
+- `/api/v1/credits/transactions`
+- `/api/v1/credits/reservations`
+- `/api/v1/credits/packages`
+- `/api/v1/credits/orders`
+- `/api/v1/credits/orders/:orderId/start-payment`
+- `/api/v1/credits/orders/:orderId/cancel`
+
+Administrative routes include credit-package CRUD, account and ledger views, grant/deduct/refund actions, reconciliation, and order history under `/api/v1/admin`. Adjustments require a reason and idempotency key and emit durable audit events.
+
+Required credit/payment settings are `DEFAULT_CURRENCY`, `CREDIT_MAX_TRANSACTION_AMOUNT`, `CREDIT_RESERVATION_TTL_SECONDS`, `PAYMENT_PROVIDER`, `PAYMENT_WEBHOOK_SECRET`, `PAYMENT_RETURN_URL`, `PAYMENT_CANCEL_URL`, `MOCK_PAYMENT_ENABLED`, `AI_CREDIT_CHARGING_ENABLED`, and the `AI_CREDIT_*` rate settings shown in `.env.example`.
+
+No raw card data, CVV, payment token, signature, API key, or provider secret is stored or returned. Generic request records remain metadata-only for payment routes, and API-request retention never touches ledger, orders, attempts, webhook identities, or audit records.

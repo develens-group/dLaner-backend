@@ -14,6 +14,7 @@ async function bootstrap() {
     .filter(Boolean) as LogLevel[];
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     logger,
+    rawBody: true,
   });
   const config = app.get(ConfigService);
   app.set('trust proxy', config.get<number>('TRUST_PROXY', 1));
