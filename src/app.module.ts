@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
@@ -13,6 +13,9 @@ import { UsersModule } from './users/users.module';
 import { AdminModule } from './admin/admin.module';
 import { JwtAuthGuard } from './auth/jwt-auth.guard';
 import { RolesGuard } from './common/roles.guard';
+import { RequestTrackingModule } from './request-tracking/request-tracking.module';
+import { RequestTrackingMiddleware } from './request-tracking/request-tracking.middleware';
+import { AiModule } from './ai/ai.module';
 
 @Module({
   imports: [
@@ -24,6 +27,8 @@ import { RolesGuard } from './common/roles.guard';
     AuthModule,
     UsersModule,
     AdminModule,
+    RequestTrackingModule,
+    AiModule,
   ],
   controllers: [AppController],
   providers: [
@@ -33,4 +38,8 @@ import { RolesGuard } from './common/roles.guard';
     { provide: APP_GUARD, useClass: RolesGuard },
   ],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer) {
+    consumer.apply(RequestTrackingMiddleware).forRoutes('*');
+  }
+}

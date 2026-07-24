@@ -20,6 +20,33 @@ enum UserStatus {
   DELETED
 }
 
+enum ApiRequestSource {
+  WEB
+  MOBILE
+  ADMIN
+  INTERNAL
+  WEBHOOK
+  UNKNOWN
+}
+
+enum AiRequestStatus {
+  CREATED
+  QUEUED
+  PROCESSING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum AiOperation {
+  CHAT
+  TEXT_GENERATION
+  IMAGE_GENERATION
+  EMBEDDING
+  TRANSCRIPTION
+  CUSTOM
+}
+
 model User {
   id                String                   @id @default(uuid()) @db.Uuid
   email             String                   @unique @db.VarChar(320)
@@ -35,8 +62,99 @@ model User {
   sessions          Session[]
   verificationTokens EmailVerificationToken[]
   passwordResetTokens PasswordResetToken[]
+  apiRequests       ApiRequestRecord[]
+  aiRequests        AiRequest[]
+  auditLogs         AuditLog[]                @relation("AuditActor")
 
   @@index([status])
+  @@index([createdAt])
+}
+
+model ApiRequestRecord {
+  id                  String           @id @default(uuid()) @db.Uuid
+  requestId           String           @unique @db.VarChar(128)
+  userId              String?          @db.Uuid
+  sessionId           String?          @db.Uuid
+  method              String           @db.VarChar(16)
+  route               String           @db.VarChar(512)
+  path                String           @db.VarChar(2048)
+  queryJson           Json?
+  requestBodyJson     Json?
+  responseSummaryJson Json?
+  bodyCaptured        Boolean          @default(false)
+  bodyTruncated       Boolean          @default(false)
+  bodyRedacted        Boolean          @default(false)
+  statusCode          Int
+  durationMs          Int
+  ipAddress           String?          @db.VarChar(64)
+  userAgent           String?          @db.VarChar(512)
+  contentLength       Int?
+  responseLength      Int?
+  errorCode           String?          @db.VarChar(100)
+  errorMessage        String?          @db.VarChar(500)
+  source              ApiRequestSource @default(UNKNOWN)
+  createdAt           DateTime         @default(now())
+  user                User?            @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@index([route, createdAt])
+  @@index([statusCode, createdAt])
+  @@index([createdAt])
+  @@index([errorCode, createdAt])
+}
+
+model AiRequest {
+  id                    String          @id @default(uuid()) @db.Uuid
+  requestId             String?         @db.VarChar(128)
+  userId                String          @db.Uuid
+  idempotencyKey        String?         @db.VarChar(128)
+  provider              String          @db.VarChar(100)
+  model                 String          @db.VarChar(100)
+  operation             AiOperation
+  status                AiRequestStatus @default(CREATED)
+  inputJson              Json?
+  inputHash              String          @db.VarChar(64)
+  inputOmitted           Boolean         @default(false)
+  inputTruncated         Boolean         @default(false)
+  inputRedacted          Boolean         @default(false)
+  outputJson             Json?
+  outputOmitted          Boolean         @default(false)
+  outputTruncated        Boolean         @default(false)
+  outputRedacted         Boolean         @default(false)
+  providerRequestId      String?         @db.VarChar(255)
+  promptTokens           Int?
+  completionTokens       Int?
+  totalTokens            Int?
+  estimatedCreditCost    Decimal?        @db.Decimal(18, 6)
+  chargedCreditAmount    Decimal?        @db.Decimal(18, 6)
+  latencyMs              Int?
+  errorCode              String?         @db.VarChar(100)
+  errorMessage           String?         @db.VarChar(500)
+  startedAt              DateTime
+  completedAt            DateTime?
+  createdAt              DateTime        @default(now())
+  updatedAt              DateTime        @updatedAt
+  user                   User            @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@unique([userId, idempotencyKey])
+  @@index([userId, createdAt])
+  @@index([status, createdAt])
+  @@index([provider, model, createdAt])
+  @@index([requestId])
+}
+
+model AuditLog {
+  id         String   @id @default(uuid()) @db.Uuid
+  action     String   @db.VarChar(150)
+  actorId    String?  @db.Uuid
+  targetType String   @db.VarChar(100)
+  targetId   String?  @db.VarChar(255)
+  metadata   Json?
+  createdAt  DateTime @default(now())
+  actor      User?    @relation("AuditActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([actorId, createdAt])
+  @@index([action, createdAt])
   @@index([createdAt])
 }
 

@@ -1,4 +1,4 @@
-import { ValidationPipe } from '@nestjs/common';
+import { LogLevel, ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import { NestExpressApplication } from '@nestjs/platform-express';
@@ -9,9 +9,14 @@ import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './common/http-exception.filter';
 
 async function bootstrap() {
-  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  const logger = (process.env.LOG_LEVELS ?? 'log,error,warn')
+    .split(',')
+    .filter(Boolean) as LogLevel[];
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
+    logger,
+  });
   const config = app.get(ConfigService);
-  app.set('trust proxy', 1);
+  app.set('trust proxy', config.get<number>('TRUST_PROXY', 1));
   app.use(helmet());
   app.use(cookieParser());
   app.useGlobalPipes(
@@ -40,6 +45,7 @@ async function bootstrap() {
     app,
     SwaggerModule.createDocument(app, swaggerConfig),
   );
+  app.enableShutdownHooks();
   await app.listen(config.get<number>('PORT', 3000));
 }
 void bootstrap();

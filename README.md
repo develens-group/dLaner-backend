@@ -61,3 +61,45 @@ Integration tests that exercise PostgreSQL should use a dedicated PostgreSQL `DA
 ## Security decisions
 
 Passwords and refresh tokens use Argon2; one-time email/reset tokens use SHA-256 because they contain 256 bits of randomness and are compared by exact indexed digest. DTO payloads are transformed, whitelisted, and reject extra fields. Authentication failures avoid credential enumeration, secrets/hashes are never serialized, sensitive endpoints are throttled, CORS is allowlisted, Helmet is enabled, and the API uses consistent `{ data, meta }` success envelopes and `{ error, meta }` failures. Authentication request bodies are not logged.
+
+## Request tracking, audit, and AI history
+
+These are separate concerns:
+
+- Access logs are structured operational events containing request ID, normalized route, timing, sizes, status, safe client metadata, and authenticated user/session IDs. They never contain headers, cookies, bodies, prompts, or response bodies.
+- `ApiRequestRecord` is retained HTTP metadata. Unknown routes are metadata-only. Approved authentication routes retain normalized email only; password/token routes and AI creation bodies are omitted.
+- `AuditLog` is the durable security trail for administrative detail views, user administration, and retention cleanup.
+- `AiRequest` is domain history for provider lifecycle, optional prompt/output storage, usage, latency, and stable input hashes. It is not a credit ledger.
+
+Every response returns `X-Request-Id`. A valid client value is reused; malformed values are replaced with UUIDs. The recursive sanitizer redacts password, token, authorization, cookie, API-key, provider-secret, payment-token, card-number, and CVV fields. Strings, arrays, nesting, and serialized sizes are bounded and truncation/omission flags are persisted.
+
+Persistence exclusions are `/`, `/health/live`, `/health/ready`, Swagger/static assets, and `OPTIONS`. They still receive request IDs and access logs.
+
+No Redis/BullMQ infrastructure existed, so sanitized records use a bounded asynchronous in-process buffer after response completion. Inserts retry three times and upsert by request ID. Saturation is logged and uses sanitized direct persistence; final loss is explicitly logged. `API_REQUEST_PERSISTENCE_MODE=sync` is the deterministic test adapter. Shutdown hooks flush queued work.
+
+Run retention from a scheduler:
+
+```bash
+npm run retention:cleanup
+```
+
+It deletes only expired API-request and AI-history rows, never audit, financial, security, or billing records.
+
+Relevant environment variables are `LOG_LEVELS`, `TRUST_PROXY`, `API_REQUEST_STORAGE_ENABLED`, `API_REQUEST_BODY_CAPTURE_ENABLED`, `API_REQUEST_RETENTION_DAYS`, `API_REQUEST_MAX_BODY_BYTES`, `API_REQUEST_MAX_QUERY_BYTES`, `API_REQUEST_PERSISTENCE_MODE`, `API_REQUEST_QUEUE_MAX_SIZE`, `API_REQUEST_CAPTURE_IP`, `AI_HISTORY_STORE_INPUT`, `AI_HISTORY_STORE_OUTPUT`, `AI_HISTORY_MAX_INPUT_BYTES`, `AI_HISTORY_MAX_OUTPUT_BYTES`, `AI_HISTORY_RETENTION_DAYS`, and `AI_PROVIDER_TIMEOUT_MS`.
+
+Administrative routes are `/api/v1/admin/api-requests`, `/api/v1/admin/api-requests/stats`, `/api/v1/admin/api-requests/:requestId`, `/api/v1/admin/ai-requests`, `/api/v1/admin/ai-requests/stats`, and `/api/v1/admin/ai-requests/:id`. Lists use bounded cursor pagination; API-request filters cover user, route, method, status, error, source, request ID, and date.
+
+The `AiProvider` abstraction returns normalized output and optional usage. The built-in `mock` provider requires no paid account:
+
+```json
+{
+  "provider": "mock",
+  "model": "mock-1",
+  "operation": "CHAT",
+  "input": { "prompt": "Hello" }
+}
+```
+
+Send this to `POST /api/v1/ai/requests` with an optional `Idempotency-Key`. Users can list, inspect, and cancel only their own records. Cancellation succeeds only while CREATED or QUEUED. Use `simulateFailure: true` to test normalized provider failures.
+
+For troubleshooting, run `npx prisma validate`, `npx prisma migrate status`, `npm run retention:cleanup`, and `npm test -- --runInBand`. If `api_request_persistence_failed` appears, check PostgreSQL connectivity and buffer sizing.

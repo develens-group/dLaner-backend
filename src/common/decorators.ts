@@ -27,3 +27,11 @@ export const CurrentSession = createParamDecorator(
       }
     ).user.sessionId,
 );
+export const CurrentRequestId = createParamDecorator(
+  (_: unknown, context: ExecutionContext): string | undefined =>
+    (
+      context.switchToHttp().getRequest<Request>() as Request & {
+        requestId?: string;
+      }
+    ).requestId,
+);

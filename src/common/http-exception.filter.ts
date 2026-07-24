@@ -23,6 +23,11 @@ export class HttpExceptionFilter implements ExceptionFilter {
         : payload && typeof payload === 'object' && 'message' in payload
           ? (payload as { message: string | string[] }).message
           : 'Internal server error';
+    res.locals.errorCode =
+      exception instanceof HttpException
+        ? exception.name.replace(/Exception$/, '').toUpperCase()
+        : 'INTERNAL_SERVER_ERROR';
+    res.locals.errorMessage = Array.isArray(message) ? message[0] : message;
     res
       .status(status)
       .json({ error: { statusCode: status, message }, meta: null });
