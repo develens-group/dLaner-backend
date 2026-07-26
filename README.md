@@ -1,10 +1,59 @@
-# Dlander backend
+# Dlander Backend
 
-Production-oriented NestJS API backed by PostgreSQL and Prisma. It provides authentication, operational request history, AI execution history, and immutable-ledger credit accounting. It intentionally does not persist canvas, scene, template, Excalidraw, or browser-cache data.
+Production-oriented REST API built with NestJS, PostgreSQL, Prisma and Swagger. It provides authentication, request and AI history, and immutable-ledger credit accounting.
 
-## Setup
+## Quick start
 
-Copy `.env.example` to `.env`, replace both JWT secrets with different cryptographically random values of at least 32 characters, create the PostgreSQL database, then run:
+### Prerequisites
+
+- [Node.js](https://nodejs.org/) and npm
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/)
+- Git
+
+### 1. Clone and enter the project
+
+```bash
+git clone https://github.com/develens-group/dLaner-backend.git
+cd dLaner-backend
+```
+
+### 2. Create the environment file
+
+macOS/Linux:
+
+```bash
+cp .env.example .env
+```
+
+Windows PowerShell:
+
+```powershell
+Copy-Item .env.example .env
+```
+
+Open `.env` and replace `JWT_ACCESS_SECRET` and `JWT_REFRESH_SECRET` with two different random values of at least 32 characters. For the included Docker database, keep:
+
+```env
+NODE_ENV=development
+PORT=3000
+DATABASE_URL=postgresql://postgres:postgres@localhost:5432/dlander?schema=public
+AUTH_REFRESH_TOKEN_TRANSPORT=body
+```
+
+Never commit the `.env` file or real secrets.
+
+### 3. Start PostgreSQL and Mailpit
+
+Make sure Docker Desktop is running, then execute:
+
+```bash
+docker compose up -d
+docker compose ps
+```
+
+This starts PostgreSQL on `localhost:5432` and the Mailpit inbox on [http://localhost:8025](http://localhost:8025).
+
+### 4. Install, migrate and start
 
 ```bash
 npm install
@@ -12,6 +61,51 @@ npx prisma generate
 npx prisma migrate deploy
 npm run start:dev
 ```
+
+On Windows PowerShell, if script execution is disabled for `npm.ps1`, use the `.cmd` executables:
+
+```powershell
+npm.cmd install
+npx.cmd prisma generate
+npx.cmd prisma migrate deploy
+npm.cmd run start:dev
+```
+
+After NestJS starts, open:
+
+| Service | URL |
+| --- | --- |
+| Swagger UI | [http://localhost:3000/api/docs](http://localhost:3000/api/docs) |
+| OpenAPI JSON | [http://localhost:3000/api/docs-json](http://localhost:3000/api/docs-json) |
+| API | [http://localhost:3000](http://localhost:3000) |
+| Mailpit inbox | [http://localhost:8025](http://localhost:8025) |
+
+### Using protected endpoints in Swagger
+
+1. Register with `POST /api/v1/auth/register`.
+2. Open Mailpit, copy the verification token and verify the account.
+3. Log in with `POST /api/v1/auth/login`.
+4. Copy the returned `accessToken`.
+5. Click **Authorize** in Swagger and paste only the token, without the `Bearer ` prefix.
+
+Swagger retains the authorization value across page refreshes in development.
+
+### Start again later
+
+After the first installation, these commands are normally enough:
+
+```bash
+docker compose up -d
+npm run start:dev
+```
+
+Stop NestJS with `Ctrl+C`. Stop the local containers without deleting database data:
+
+```bash
+docker compose down
+```
+
+## Configuration
 
 Required settings are `DATABASE_URL`, `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, `JWT_ACCESS_EXPIRES_IN`, `JWT_REFRESH_EXPIRES_IN`, `EMAIL_VERIFICATION_EXPIRES_IN`, `PASSWORD_RESET_EXPIRES_IN`, and `FRONTEND_URL`. `CORS_ORIGINS` is a comma-separated allowlist. See `.env.example` for SMTP, port, cookie, and transport options.
 
