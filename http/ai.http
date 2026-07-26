@@ -1,0 +1,40 @@
+### Execute mock AI request
+POST {{baseUrl}}/api/v1/ai/requests
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+Idempotency-Key: {{idempotencyKey}}-ai
+
+{
+  "provider": "mock",
+  "model": "mock-1",
+  "operation": "CHAT",
+  "input": {
+    "prompt": "Give a short local test response."
+  }
+}
+
+### AI history
+GET {{baseUrl}}/api/v1/ai/requests?limit=25&provider=mock
+Authorization: Bearer {{accessToken}}
+
+### AI request detail
+GET {{baseUrl}}/api/v1/ai/requests/{{aiRequestId}}
+Authorization: Bearer {{accessToken}}
+
+### Cancel a queued request
+POST {{baseUrl}}/api/v1/ai/requests/{{aiRequestId}}/cancel
+Authorization: Bearer {{accessToken}}
+
+### Common error: mock provider failure
+POST {{baseUrl}}/api/v1/ai/requests
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+Idempotency-Key: {{idempotencyKey}}-ai-failure
+
+{
+  "provider": "mock",
+  "model": "mock-1",
+  "operation": "CHAT",
+  "input": { "simulateFailure": true }
+}
+

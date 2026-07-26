@@ -1,0 +1,16 @@
+### Admin request records
+GET {{baseUrl}}/api/v1/admin/api-requests?limit=25&minStatusCode=400
+Authorization: Bearer {{accessToken}}
+
+### Request statistics
+GET {{baseUrl}}/api/v1/admin/api-requests/stats
+Authorization: Bearer {{accessToken}}
+
+### Request detail
+GET {{baseUrl}}/api/v1/admin/api-requests/{{requestId}}
+Authorization: Bearer {{accessToken}}
+
+### Common error: ordinary users receive 403
+GET {{baseUrl}}/api/v1/admin/api-requests
+Authorization: Bearer {{accessToken}}
+

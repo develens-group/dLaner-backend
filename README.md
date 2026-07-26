@@ -179,3 +179,91 @@ Administrative routes include credit-package CRUD, account and ledger views, gra
 Required credit/payment settings are `DEFAULT_CURRENCY`, `CREDIT_MAX_TRANSACTION_AMOUNT`, `CREDIT_RESERVATION_TTL_SECONDS`, `PAYMENT_PROVIDER`, `PAYMENT_WEBHOOK_SECRET`, `PAYMENT_RETURN_URL`, `PAYMENT_CANCEL_URL`, `MOCK_PAYMENT_ENABLED`, `AI_CREDIT_CHARGING_ENABLED`, and the `AI_CREDIT_*` rate settings shown in `.env.example`.
 
 No raw card data, CVV, payment token, signature, API key, or provider secret is stored or returned. Generic request records remain metadata-only for payment routes, and API-request retention never touches ledger, orders, attempts, webhook identities, or audit records.
+
+## Local API testing
+
+### 1. Start PostgreSQL and Mailpit
+
+Install Docker Desktop, ensure its engine is running, then execute from the repository root:
+
+```bash
+docker compose up -d
+docker compose ps
+```
+
+PostgreSQL is exposed at `localhost:5432`. The container initializes two separate databases:
+
+- `dlander` for local development
+- `dlander_test` exclusively for automated e2e tests
+
+Mailpit SMTP is available at `localhost:1025`; its inbox UI is [http://localhost:8025](http://localhost:8025).
+
+### 2. Configure and migrate the development database
+
+Copy `.env.example` to `.env`, replace the documented development secrets, and retain the `dlander` database name:
+
+```bash
+npm install
+npx prisma generate
+npx prisma migrate deploy
+```
+
+Never point `.env.test.local` at the development or production database. The reset script refuses non-local hosts and database names that do not end in `_test`.
+
+### 3. Start NestJS and Swagger
+
+```bash
+npm run start:dev
+```
+
+Open [http://localhost:3000/api/docs](http://localhost:3000/api/docs). Click **Authorize** and paste the JWT access token without a `Bearer ` prefix. In development, Swagger keeps the authorization value in browser storage across page refreshes.
+
+### 4. Send VS Code REST Client requests
+
+Install the VS Code extension **REST Client** (`humao.rest-client`). Open any file under `http/`, select the `local` REST Client environment, and click **Send Request** above an example.
+
+The committed `http/http-client.env.json` contains placeholders only. Tokens returned by `auth.http` can be stored as VS Code REST Client global variables for the current editor session. For persistent private values, create `http/http-client.private.env.json`; it is ignored by Git. Never commit real passwords, JWTs, refresh tokens, payment signatures, or verification/reset tokens.
+
+Recommended sequence:
+
+1. Run registration in `http/auth.http`.
+2. Open Mailpit and copy the verification token.
+3. Verify and log in.
+4. Paste or capture the access/refresh tokens.
+5. Use `users.http`, `ai.http`, `credits.http`, `api-requests.http`, and `admin.http`.
+
+The collections include successful requests and common validation, authentication, ownership, package, provider, and RBAC errors.
+
+### 5. Run unit and e2e tests
+
+Create the private test configuration once:
+
+```powershell
+Copy-Item .env.test.example .env.test.local
+```
+
+On macOS/Linux:
+
+```bash
+cp .env.test.example .env.test.local
+```
+
+Then run:
+
+```bash
+npm test
+npm run test:db:reset
+npm run test:e2e
+npm run test:e2e:watch
+npm run test:e2e:cov
+```
+
+`test:e2e` and `test:e2e:cov` reset `dlander_test` before Jest starts. `test:e2e:watch` deliberately does not reset on every rerun; run `npm run test:db:reset` before starting watch mode. The e2e application loads `.env.test.local`, verifies the local `_test` database again, starts the real `AppModule`, and applies the same validation, exception, security, request-ID, and Swagger setup as the running API.
+
+To stop local services:
+
+```bash
+docker compose down
+```
+
+Use `docker compose down -v` only when you intentionally want to delete both local database volumes and recreate them from scratch.

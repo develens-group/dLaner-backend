@@ -50,7 +50,31 @@ class Environment {
 }
 
 export function validateEnvironment(values: Record<string, unknown>) {
-  const config = plainToInstance(Environment, values, {
+  const numericKeys = [
+    'PORT',
+    'API_REQUEST_RETENTION_DAYS',
+    'API_REQUEST_MAX_BODY_BYTES',
+    'API_REQUEST_MAX_QUERY_BYTES',
+    'API_REQUEST_QUEUE_MAX_SIZE',
+    'TRUST_PROXY',
+    'AI_HISTORY_MAX_INPUT_BYTES',
+    'AI_HISTORY_MAX_OUTPUT_BYTES',
+    'AI_HISTORY_RETENTION_DAYS',
+    'AI_PROVIDER_TIMEOUT_MS',
+    'CREDIT_MAX_TRANSACTION_AMOUNT',
+    'CREDIT_RESERVATION_TTL_SECONDS',
+    'AI_CREDIT_FIXED_COST',
+    'AI_CREDIT_INPUT_UNIT_BYTES',
+    'AI_CREDIT_INPUT_UNIT_COST',
+    'AI_CREDIT_OUTPUT_UNIT_BYTES',
+    'AI_CREDIT_OUTPUT_UNIT_COST',
+  ] as const;
+  const normalized: Record<string, unknown> = { ...values };
+  for (const key of numericKeys) {
+    if (typeof normalized[key] === 'string' && normalized[key] !== '')
+      normalized[key] = Number(normalized[key]);
+  }
+  const config = plainToInstance(Environment, normalized, {
     enableImplicitConversion: true,
   });
   const errors = validateSync(config, { skipMissingProperties: false });

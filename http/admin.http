@@ -1,0 +1,47 @@
+### Users
+GET {{baseUrl}}/api/v1/admin/users?page=1&limit=20
+Authorization: Bearer {{accessToken}}
+
+### Block user
+POST {{baseUrl}}/api/v1/admin/users/{{userId}}/block
+Authorization: Bearer {{accessToken}}
+
+### Create credit package
+POST {{baseUrl}}/api/v1/admin/credit-packages
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "name": "Local 100",
+  "creditAmount": 100,
+  "bonusCreditAmount": 10,
+  "priceMinor": 499,
+  "currency": "USD",
+  "isActive": true
+}
+
+### Grant credits
+POST {{baseUrl}}/api/v1/admin/credit-accounts/{{userId}}/grant
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "amount": 100,
+  "reason": "Local integration testing",
+  "idempotencyKey": "{{idempotencyKey}}-grant"
+}
+
+### Admin AI statistics
+GET {{baseUrl}}/api/v1/admin/ai-requests/stats
+Authorization: Bearer {{accessToken}}
+
+### Common error: invalid adjustment amount
+POST {{baseUrl}}/api/v1/admin/credit-accounts/{{userId}}/deduct
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "amount": -1,
+  "reason": "Expected validation error",
+  "idempotencyKey": "{{idempotencyKey}}-invalid"
+}

@@ -1,0 +1,76 @@
+@contentType = application/json
+
+### Register
+POST {{baseUrl}}/api/v1/auth/register
+Content-Type: {{contentType}}
+X-Request-Id: rest-register-001
+
+{
+  "email": "{{email}}",
+  "password": "{{password}}",
+  "displayName": "Local Tester"
+}
+
+### Common error: duplicate registration
+POST {{baseUrl}}/api/v1/auth/register
+Content-Type: {{contentType}}
+
+{
+  "email": "{{email}}",
+  "password": "{{password}}"
+}
+
+### Verify email — copy the token from Mailpit
+POST {{baseUrl}}/api/v1/auth/verify-email
+Content-Type: {{contentType}}
+
+{
+  "token": "paste-verification-token"
+}
+
+### Login
+# @name login
+POST {{baseUrl}}/api/v1/auth/login
+Content-Type: {{contentType}}
+
+{
+  "email": "{{email}}",
+  "password": "{{password}}"
+}
+
+> {%
+  if (response.body.data) {
+    client.global.set("accessToken", response.body.data.accessToken);
+    client.global.set("refreshToken", response.body.data.refreshToken);
+  }
+%}
+
+### Common error: incorrect password
+POST {{baseUrl}}/api/v1/auth/login
+Content-Type: {{contentType}}
+
+{
+  "email": "{{email}}",
+  "password": "DefinitelyWrong123"
+}
+
+### Refresh body-mode token
+POST {{baseUrl}}/api/v1/auth/refresh
+Content-Type: {{contentType}}
+
+{
+  "refreshToken": "{{refreshToken}}"
+}
+
+### Forgot password (always generic)
+POST {{baseUrl}}/api/v1/auth/forgot-password
+Content-Type: {{contentType}}
+
+{
+  "email": "{{email}}"
+}
+
+### Logout current session
+POST {{baseUrl}}/api/v1/auth/logout
+Authorization: Bearer {{accessToken}}
+

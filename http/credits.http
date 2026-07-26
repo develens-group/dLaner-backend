@@ -1,0 +1,48 @@
+### Balance
+GET {{baseUrl}}/api/v1/credits/balance
+Authorization: Bearer {{accessToken}}
+
+### Active packages
+GET {{baseUrl}}/api/v1/credits/packages
+Authorization: Bearer {{accessToken}}
+
+### Create purchase order; price and credits come from the database
+POST {{baseUrl}}/api/v1/credits/orders
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+Idempotency-Key: {{idempotencyKey}}-order
+
+{
+  "packageId": "{{packageId}}"
+}
+
+### Purchase history
+GET {{baseUrl}}/api/v1/credits/orders?limit=25
+Authorization: Bearer {{accessToken}}
+
+### Order detail
+GET {{baseUrl}}/api/v1/credits/orders/{{orderId}}
+Authorization: Bearer {{accessToken}}
+
+### Start mock payment
+POST {{baseUrl}}/api/v1/credits/orders/{{orderId}}/start-payment
+Authorization: Bearer {{accessToken}}
+
+### Cancel unpaid order
+POST {{baseUrl}}/api/v1/credits/orders/{{orderId}}/cancel
+Authorization: Bearer {{accessToken}}
+
+### Ledger history
+GET {{baseUrl}}/api/v1/credits/transactions?limit=25
+Authorization: Bearer {{accessToken}}
+
+### Common error: unknown package
+POST {{baseUrl}}/api/v1/credits/orders
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+Idempotency-Key: {{idempotencyKey}}-bad-package
+
+{
+  "packageId": "00000000-0000-4000-8000-000000000000"
+}
+

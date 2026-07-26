@@ -1,0 +1,24 @@
+### Current user
+GET {{baseUrl}}/api/v1/users/me
+Authorization: Bearer {{accessToken}}
+
+### Update display name
+PATCH {{baseUrl}}/api/v1/users/me
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "displayName": "REST Client User"
+}
+
+### Active sessions
+GET {{baseUrl}}/api/v1/users/me/sessions
+Authorization: Bearer {{accessToken}}
+
+### Revoke an owned session
+DELETE {{baseUrl}}/api/v1/users/me/sessions/{{sessionId}}
+Authorization: Bearer {{accessToken}}
+
+### Common error: no bearer token
+GET {{baseUrl}}/api/v1/users/me
+

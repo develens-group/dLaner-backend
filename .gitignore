@@ -42,6 +42,11 @@ lerna-debug.log*
 .env.production.local
 .env.local
 
+# Private REST Client environments and generated local state
+http/http-client.private.env.json
+http/*.local.http
+http/.tokens.json
+
 # temp directory
 .temp
 .tmp
