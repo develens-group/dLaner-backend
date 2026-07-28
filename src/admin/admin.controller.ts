@@ -1,6 +1,8 @@
 import {
   Controller,
   Get,
+  HttpCode,
+  HttpStatus,
   Param,
   ParseUUIDPipe,
   Post,
@@ -27,13 +29,17 @@ export class AdminController {
   @Get(':userId') async get(@Param('userId', ParseUUIDPipe) id: string) {
     return response(await this.admin.get(id));
   }
-  @Post(':userId/block') async block(
+  @Post(':userId/block')
+  @HttpCode(HttpStatus.OK)
+  async block(
     @CurrentUser() actor: AccessPrincipal,
     @Param('userId', ParseUUIDPipe) id: string,
   ) {
     return response(await this.admin.block(actor, id));
   }
-  @Post(':userId/unblock') async unblock(
+  @Post(':userId/unblock')
+  @HttpCode(HttpStatus.OK)
+  async unblock(
     @CurrentUser() actor: AccessPrincipal,
     @Param('userId', ParseUUIDPipe) id: string,
   ) {

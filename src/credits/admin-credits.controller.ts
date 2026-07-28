@@ -3,6 +3,8 @@ import {
   Controller,
   Delete,
   Get,
+  HttpCode,
+  HttpStatus,
   Param,
   ParseUUIDPipe,
   Patch,
@@ -156,7 +158,9 @@ export class AdminCreditsController {
     });
     return response(entry);
   }
-  @Post('credit-accounts/:userId/reconcile') async reconcile(
+  @Post('credit-accounts/:userId/reconcile')
+  @HttpCode(HttpStatus.OK)
+  async reconcile(
     @CurrentUser() actor: AccessPrincipal,
     @Param('userId', ParseUUIDPipe) userId: string,
   ) {

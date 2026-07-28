@@ -3,6 +3,8 @@ import {
   Controller,
   Get,
   Headers,
+  HttpCode,
+  HttpStatus,
   Param,
   ParseUUIDPipe,
   Post,
@@ -43,7 +45,9 @@ export class AiController {
   ) {
     return response(await this.ai.get(id, user.userId));
   }
-  @Post(':id/cancel') async cancel(
+  @Post(':id/cancel')
+  @HttpCode(HttpStatus.OK)
+  async cancel(
     @CurrentUser() user: AccessPrincipal,
     @Param('id', ParseUUIDPipe) id: string,
   ) {

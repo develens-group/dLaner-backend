@@ -3,6 +3,8 @@ import {
   Controller,
   Get,
   Headers,
+  HttpCode,
+  HttpStatus,
   Param,
   ParseUUIDPipe,
   Post,
@@ -75,6 +77,7 @@ export class CreditsController {
     return response(await this.commerce.ownedOrder(user.userId, id));
   }
   @Post('orders/:orderId/start-payment')
+  @HttpCode(HttpStatus.OK)
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
   async startPayment(
     @CurrentUser() user: AccessPrincipal,
@@ -83,6 +86,7 @@ export class CreditsController {
     return response(await this.commerce.startPayment(user.userId, id));
   }
   @Post('orders/:orderId/cancel')
+  @HttpCode(HttpStatus.OK)
   async cancel(
     @CurrentUser() user: AccessPrincipal,
     @Param('orderId', ParseUUIDPipe) id: string,

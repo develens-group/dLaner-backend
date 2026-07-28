@@ -1,6 +1,8 @@
 import {
   Body,
   Controller,
+  HttpCode,
+  HttpStatus,
   Post,
   Req,
   Res,
@@ -43,6 +45,7 @@ export class AuthController {
 
   @Public()
   @Post('verify-email')
+  @HttpCode(HttpStatus.OK)
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
   async verify(@Body() dto: TokenDto) {
     return response(await this.auth.verifyEmail(dto.token));
@@ -50,6 +53,7 @@ export class AuthController {
 
   @Public()
   @Post('resend-verification')
+  @HttpCode(HttpStatus.OK)
   @Throttle({ default: { limit: 3, ttl: 60_000 } })
   async resend(@Body() dto: EmailDto) {
     return response(await this.auth.resendVerification(dto.email));
@@ -57,6 +61,7 @@ export class AuthController {
 
   @Public()
   @Post('login')
+  @HttpCode(HttpStatus.OK)
   @Throttle({ default: { limit: 5, ttl: 60_000 } })
   async login(
     @Body() dto: LoginDto,
@@ -69,6 +74,7 @@ export class AuthController {
 
   @Public()
   @Post('refresh')
+  @HttpCode(HttpStatus.OK)
   @Throttle({ default: { limit: 20, ttl: 60_000 } })
   async refresh(
     @Body() dto: RefreshDto,
@@ -82,6 +88,7 @@ export class AuthController {
 
   @ApiBearerAuth()
   @Post('logout')
+  @HttpCode(HttpStatus.OK)
   async logout(
     @CurrentSession() sessionId: string,
     @Res({ passthrough: true }) res: Response,
@@ -91,6 +98,7 @@ export class AuthController {
   }
   @ApiBearerAuth()
   @Post('logout-all')
+  @HttpCode(HttpStatus.OK)
   async logoutAll(
     @CurrentUser() user: AccessPrincipal,
     @Res({ passthrough: true }) res: Response,
@@ -100,6 +108,7 @@ export class AuthController {
   }
   @Public()
   @Post('forgot-password')
+  @HttpCode(HttpStatus.OK)
   @Throttle({ default: { limit: 3, ttl: 60_000 } })
   async forgot(@Body() dto: EmailDto) {
     return response(await this.auth.forgotPassword(dto.email));
@@ -107,6 +116,7 @@ export class AuthController {
 
   @Public()
   @Post('reset-password')
+  @HttpCode(HttpStatus.OK)
   @Throttle({ default: { limit: 5, ttl: 60_000 } })
   async reset(@Body() dto: ResetPasswordDto) {
     return response(await this.auth.resetPassword(dto));
@@ -114,6 +124,7 @@ export class AuthController {
 
   @ApiBearerAuth()
   @Post('change-password')
+  @HttpCode(HttpStatus.OK)
   async change(
     @CurrentUser() user: AccessPrincipal,
     @CurrentSession() sessionId: string,

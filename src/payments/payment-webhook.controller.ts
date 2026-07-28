@@ -1,4 +1,12 @@
-import { Body, Controller, Headers, Param, Post } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Headers,
+  HttpCode,
+  HttpStatus,
+  Param,
+  Post,
+} from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { response } from '../common/api-response';
 import { Public } from '../common/decorators';
@@ -10,6 +18,7 @@ export class PaymentWebhookController {
   constructor(private readonly commerce: CreditCommerceService) {}
   @Public()
   @Post(':provider')
+  @HttpCode(HttpStatus.OK)
   async webhook(
     @Param('provider') provider: string,
     @Headers('x-payment-signature') signature: string | undefined,
