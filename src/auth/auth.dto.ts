@@ -1,4 +1,5 @@
 import { Transform } from 'class-transformer';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   IsEmail,
   IsOptional,
@@ -11,6 +12,7 @@ import {
 export const PASSWORD_PATTERN = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).+$/;
 
 export class EmailDto {
+  @ApiProperty({ example: 'user@example.com', format: 'email', maxLength: 320 })
   @Transform(({ value }: { value: unknown }) =>
     typeof value === 'string' ? value.trim().toLowerCase() : value,
   )
@@ -19,6 +21,12 @@ export class EmailDto {
   email!: string;
 }
 export class RegisterDto extends EmailDto {
+  @ApiProperty({
+    example: 'StrongPass123',
+    minLength: 10,
+    maxLength: 128,
+    description: 'Must contain uppercase, lowercase, and numeric characters',
+  })
   @IsString()
   @Length(10, 128)
   @Matches(PASSWORD_PATTERN, {
@@ -26,24 +34,66 @@ export class RegisterDto extends EmailDto {
       'password must contain uppercase, lowercase, and numeric characters',
   })
   password!: string;
+  @ApiPropertyOptional({
+    example: 'Dlander User',
+    minLength: 1,
+    maxLength: 100,
+  })
   @IsOptional()
   @IsString()
   @Length(1, 100)
   displayName?: string;
 }
 export class LoginDto extends EmailDto {
-  @IsString() @Length(1, 128) password!: string;
+  @ApiProperty({ example: 'StrongPass123', minLength: 1, maxLength: 128 })
+  @IsString()
+  @Length(1, 128)
+  password!: string;
 }
 export class TokenDto {
-  @IsString() @Length(20, 4096) token!: string;
+  @ApiProperty({
+    example: 'eyJhbGciOiJIUzI1NiJ9.valid-verification-token',
+    minLength: 20,
+    maxLength: 4096,
+  })
+  @IsString()
+  @Length(20, 4096)
+  token!: string;
 }
 export class RefreshDto {
-  @IsOptional() @IsString() @Length(20, 4096) refreshToken?: string;
+  @ApiPropertyOptional({
+    example: 'eyJhbGciOiJIUzI1NiJ9.valid-refresh-token',
+    minLength: 20,
+    maxLength: 4096,
+  })
+  @IsOptional()
+  @IsString()
+  @Length(20, 4096)
+  refreshToken?: string;
 }
 export class ResetPasswordDto extends TokenDto {
-  @IsString() @Length(10, 128) @Matches(PASSWORD_PATTERN) newPassword!: string;
+  @ApiProperty({
+    example: 'NewStrongPass123',
+    minLength: 10,
+    maxLength: 128,
+  })
+  @IsString()
+  @Length(10, 128)
+  @Matches(PASSWORD_PATTERN)
+  newPassword!: string;
 }
 export class ChangePasswordDto {
-  @IsString() @Length(1, 128) currentPassword!: string;
-  @IsString() @Length(10, 128) @Matches(PASSWORD_PATTERN) newPassword!: string;
+  @ApiProperty({ example: 'StrongPass123', minLength: 1, maxLength: 128 })
+  @IsString()
+  @Length(1, 128)
+  currentPassword!: string;
+  @ApiProperty({
+    example: 'NewStrongPass123',
+    minLength: 10,
+    maxLength: 128,
+  })
+  @IsString()
+  @Length(10, 128)
+  @Matches(PASSWORD_PATTERN)
+  newPassword!: string;
 }
