@@ -17,6 +17,7 @@ class Environment {
   @IsString() EMAIL_VERIFICATION_EXPIRES_IN!: string;
   @IsString() PASSWORD_RESET_EXPIRES_IN!: string;
   @IsUrl({ require_tld: false }) FRONTEND_URL!: string;
+  @IsIn(['smtp', 'resend']) MAIL_TRANSPORT = 'smtp';
   @IsIn(['body', 'cookie']) AUTH_REFRESH_TOKEN_TRANSPORT = 'body';
   @IsInt() @Min(1) PORT = 3000;
   @IsIn(['true', 'false']) API_REQUEST_STORAGE_ENABLED = 'true';
@@ -89,6 +90,20 @@ export function validateEnvironment(values: Record<string, unknown>) {
   if (config.PAYMENT_WEBHOOK_SECRET.length < 32)
     throw new Error(
       'PAYMENT_WEBHOOK_SECRET must contain at least 32 characters',
+    );
+  if (
+    config.MAIL_TRANSPORT === 'resend' &&
+    (typeof values.RESEND_API_KEY !== 'string' || !values.RESEND_API_KEY.trim())
+  )
+    throw new Error(
+      'RESEND_API_KEY is required when MAIL_TRANSPORT is set to resend',
+    );
+  if (
+    config.MAIL_TRANSPORT === 'resend' &&
+    (typeof values.MAIL_FROM !== 'string' || !values.MAIL_FROM.trim())
+  )
+    throw new Error(
+      'MAIL_FROM is required when MAIL_TRANSPORT is set to resend',
     );
   return config;
 }

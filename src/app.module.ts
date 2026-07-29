@@ -17,6 +17,7 @@ import { RequestTrackingModule } from './request-tracking/request-tracking.modul
 import { RequestTrackingMiddleware } from './request-tracking/request-tracking.middleware';
 import { AiModule } from './ai/ai.module';
 import { CreditsModule } from './credits/credits.module';
+import { HealthController } from './health.controller';
 
 @Module({
   imports: [
@@ -32,7 +33,7 @@ import { CreditsModule } from './credits/credits.module';
     CreditsModule,
     AiModule,
   ],
-  controllers: [AppController],
+  controllers: [AppController, HealthController],
   providers: [
     AppService,
     { provide: APP_GUARD, useClass: ThrottlerGuard },
