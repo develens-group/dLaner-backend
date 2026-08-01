@@ -7,6 +7,8 @@
   "license": "UNLICENSED",
   "scripts": {
     "build": "nest build",
+    "postinstall": "prisma generate",
+    "db:migrate:deploy": "prisma migrate deploy",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "start": "nest start",
     "start:dev": "nest start --watch",
@@ -23,6 +25,9 @@
     "test:e2e:cov": "npm run test:db:reset && jest --config ./test/jest-e2e.json --coverage --runInBand",
     "test:db:reset": "node scripts/test-db-reset.cjs",
     "retention:cleanup": "ts-node src/maintenance/retention.ts"
+  },
+  "engines": {
+    "node": "22.x"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.1",
