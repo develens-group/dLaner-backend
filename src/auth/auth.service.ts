@@ -54,29 +54,40 @@ export class AuthService {
     const passwordHash = await argon2.hash(dto.password, {
       type: argon2.argon2id,
     });
-    const token = createOpaqueToken();
+    const verificationRequired = this.verificationRequired();
+    const token = verificationRequired ? createOpaqueToken() : undefined;
     const user = await this.prisma.$transaction(async (tx) => {
       const created = await tx.user.create({
-        data: { email, passwordHash, displayName: dto.displayName?.trim() },
-      });
-      await tx.emailVerificationToken.create({
         data: {
-          userId: created.id,
-          tokenHash: hashOpaqueToken(token),
-          expiresAt: this.expiry('EMAIL_VERIFICATION_EXPIRES_IN'),
+          email,
+          passwordHash,
+          displayName: dto.displayName?.trim(),
+          status: verificationRequired
+            ? UserStatus.PENDING_VERIFICATION
+            : UserStatus.ACTIVE,
         },
       });
+      if (token)
+        await tx.emailVerificationToken.create({
+          data: {
+            userId: created.id,
+            tokenHash: hashOpaqueToken(token),
+            expiresAt: this.expiry('EMAIL_VERIFICATION_EXPIRES_IN'),
+          },
+        });
       return created;
     });
-    await this.mail.sendVerification(user.email, token);
+    if (token) await this.mail.sendVerification(user.email, token);
     return {
       user: publicUser(user),
-      message:
-        'Registration successful. Check your email to verify your account.',
+      message: verificationRequired
+        ? 'Registration successful. Check your email to verify your account.'
+        : 'Registration successful. Your account is active.',
     };
   }
 
   async verifyEmail(token: string) {
+    this.assertVerificationEnabled();
     const tokenHash = hashOpaqueToken(token);
     await this.prisma.$transaction(async (tx) => {
       const record = await tx.emailVerificationToken.findUnique({
@@ -101,6 +112,7 @@ export class AuthService {
   }
 
   async resendVerification(emailInput: string) {
+    this.assertVerificationEnabled();
     const email = normalizeEmail(emailInput);
     const user = await this.prisma.user.findUnique({ where: { email } });
     if (user?.status === UserStatus.PENDING_VERIFICATION) {
@@ -127,7 +139,7 @@ export class AuthService {
   }
 
   async login(dto: LoginDto, context: ClientContext) {
-    const user = await this.prisma.user.findUnique({
+    let user = await this.prisma.user.findUnique({
       where: { email: normalizeEmail(dto.email) },
     });
     const dummy =
@@ -137,8 +149,14 @@ export class AuthService {
       .catch(() => false);
     if (!user || !valid)
       throw new UnauthorizedException('Invalid email or password');
-    if (user.status === UserStatus.PENDING_VERIFICATION)
-      throw new ForbiddenException('Email verification is required');
+    if (user.status === UserStatus.PENDING_VERIFICATION) {
+      if (this.verificationRequired())
+        throw new ForbiddenException('Email verification is required');
+      user = await this.prisma.user.update({
+        where: { id: user.id },
+        data: { status: UserStatus.ACTIVE },
+      });
+    }
     if (user.status !== UserStatus.ACTIVE)
       throw new ForbiddenException('Account is unavailable');
     return this.prisma.$transaction(async (tx) => {
@@ -315,6 +333,13 @@ export class AuthService {
     return new Date(
       Date.now() + durationMs(this.config.getOrThrow<string>(key)),
     );
+  }
+  private verificationRequired() {
+    return this.config.get('EMAIL_VERIFICATION_REQUIRED', 'false') === 'true';
+  }
+  private assertVerificationEnabled() {
+    if (!this.verificationRequired())
+      throw new ForbiddenException('Email verification is currently disabled');
   }
   private async issueTokens(user: User, sessionId: string) {
     const base = { sub: user.id, sid: sessionId };

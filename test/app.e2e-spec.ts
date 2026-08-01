@@ -25,8 +25,10 @@ describe('Application (e2e)', () => {
     const response = await request(app.getHttpServer())
       .get('/')
       .set('X-Request-Id', 'e2e-request-root')
-      .expect(200)
-      .expect('Hello World!');
+      .expect(200);
+    expect(response.headers['content-type']).toContain('text/html');
+    expect(response.text).toContain('Dlander API');
+    expect(response.text).toContain('href="/api/docs"');
     expect(response.headers['x-request-id']).toBe('e2e-request-root');
   });
 

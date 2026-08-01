@@ -4,6 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { UserRole, UserStatus } from '@prisma/client';
+import { ConfigService } from '@nestjs/config';
 import { AuditService } from '../audit/audit.service';
 import { AccessPrincipal } from '../common/auth.types';
 import { PrismaService } from '../prisma/prisma.service';
@@ -27,6 +28,7 @@ export class AdminService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly config: ConfigService,
   ) {}
   async list(query: UserQueryDto) {
     const where = query.search
@@ -99,9 +101,11 @@ export class AdminService {
     const user = await this.prisma.user.update({
       where: { id },
       data: {
-        status: existing.emailVerifiedAt
-          ? UserStatus.ACTIVE
-          : UserStatus.PENDING_VERIFICATION,
+        status:
+          existing.emailVerifiedAt ||
+          this.config.get('EMAIL_VERIFICATION_REQUIRED', 'false') !== 'true'
+            ? UserStatus.ACTIVE
+            : UserStatus.PENDING_VERIFICATION,
       },
       select,
     });

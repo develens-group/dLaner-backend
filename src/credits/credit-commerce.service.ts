@@ -38,7 +38,8 @@ export class CreditCommerceService {
     private readonly config: ConfigService,
     private readonly audit: AuditService,
   ) {}
-  packages(admin = false) {
+  async packages(admin = false) {
+    if (!admin && !this.purchaseEnabled()) return [];
     const now = new Date();
     return this.prisma.creditPackage.findMany({
       where: admin
@@ -76,6 +77,7 @@ export class CreditCommerceService {
     });
   }
   async createOrder(userId: string, packageId: string, key: string) {
+    this.assertPurchaseEnabled();
     if (!validKey(key))
       throw new UnprocessableEntityException('Invalid Idempotency-Key');
     const requestHash = stablePayloadHash({ packageId });
@@ -130,6 +132,7 @@ export class CreditCommerceService {
     );
   }
   async startPayment(userId: string, orderId: string) {
+    this.assertPurchaseEnabled();
     const order = await this.ownedOrder(userId, orderId);
     if (order.status === CreditOrderStatus.PAID)
       return { order, alreadyPaid: true };
@@ -197,6 +200,7 @@ export class CreditCommerceService {
     payload: unknown,
     signature?: string,
   ) {
+    this.assertPurchaseEnabled();
     const provider = this.providers.get(providerName);
     const payloadHash = stablePayloadHash(payload);
     let parsed;
@@ -368,6 +372,15 @@ export class CreditCommerceService {
     const hasMore = items.length > query.limit;
     if (hasMore) items.pop();
     return { items, nextCursor: hasMore ? (items.at(-1)?.id ?? null) : null };
+  }
+  private purchaseEnabled() {
+    return this.config.get('CREDIT_PURCHASE_ENABLED', 'false') === 'true';
+  }
+  private assertPurchaseEnabled() {
+    if (!this.purchaseEnabled())
+      throw new ForbiddenException(
+        'Credit purchases are temporarily disabled; credits are assigned by an administrator',
+      );
   }
 }
 function dates(query: CursorDto) {

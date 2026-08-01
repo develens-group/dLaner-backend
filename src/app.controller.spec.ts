@@ -15,8 +15,13 @@ describe('AppController', () => {
   });
 
   describe('root', () => {
-    it('should return "Hello World!"', () => {
-      expect(appController.getHello()).toBe('Hello World!');
+    it('returns the branded API landing page', () => {
+      expect(appController.landingPage()).toContain('Dlander API');
+      expect(appController.landingPage()).toContain('/api/docs');
+    });
+
+    it('returns the landing page stylesheet', () => {
+      expect(appController.stylesheet()).toContain('.card');
     });
   });
 });

@@ -17,6 +17,7 @@ class Environment {
   @IsString() EMAIL_VERIFICATION_EXPIRES_IN!: string;
   @IsString() PASSWORD_RESET_EXPIRES_IN!: string;
   @IsUrl({ require_tld: false }) FRONTEND_URL!: string;
+  @IsIn(['true', 'false']) EMAIL_VERIFICATION_REQUIRED = 'false';
   @IsIn(['smtp', 'resend']) MAIL_TRANSPORT = 'smtp';
   @IsIn(['body', 'cookie']) AUTH_REFRESH_TOKEN_TRANSPORT = 'body';
   @IsInt() @Min(1) PORT = 3000;
@@ -38,6 +39,7 @@ class Environment {
   @IsInt() @Min(1) CREDIT_MAX_TRANSACTION_AMOUNT = 1000000000;
   @IsInt() @Min(1) CREDIT_RESERVATION_TTL_SECONDS = 900;
   @IsString() PAYMENT_PROVIDER = 'mock';
+  @IsIn(['true', 'false']) CREDIT_PURCHASE_ENABLED = 'false';
   @IsString() PAYMENT_WEBHOOK_SECRET!: string;
   @IsUrl({ require_tld: false }) PAYMENT_RETURN_URL!: string;
   @IsUrl({ require_tld: false }) PAYMENT_CANCEL_URL!: string;

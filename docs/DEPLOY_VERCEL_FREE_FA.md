@@ -64,6 +64,7 @@ JWT_REFRESH_SECRET=UNIQUE_RANDOM_VALUE_2
 JWT_ACCESS_EXPIRES_IN=15m
 JWT_REFRESH_EXPIRES_IN=30d
 EMAIL_VERIFICATION_EXPIRES_IN=24h
+EMAIL_VERIFICATION_REQUIRED=false
 PASSWORD_RESET_EXPIRES_IN=1h
 FRONTEND_URL=https://YOUR-FRONTEND-DOMAIN
 CORS_ORIGINS=https://YOUR-FRONTEND-DOMAIN
@@ -72,12 +73,18 @@ MAIL_TRANSPORT=resend
 RESEND_API_KEY=re_...
 MAIL_FROM=Dlander <onboarding@resend.dev>
 PAYMENT_PROVIDER=mock
+CREDIT_PURCHASE_ENABLED=false
 PAYMENT_WEBHOOK_SECRET=UNIQUE_RANDOM_VALUE_3
 PAYMENT_RETURN_URL=https://YOUR-FRONTEND-DOMAIN/credits/payment/success
 PAYMENT_CANCEL_URL=https://YOUR-FRONTEND-DOMAIN/credits/payment/cancel
 MOCK_PAYMENT_ENABLED=false
 API_REQUEST_PERSISTENCE_MODE=sync
 ```
+
+در سناریوی آزمایشی فعلی، `EMAIL_VERIFICATION_REQUIRED=false` حساب را بلافاصله
+پس از ثبت‌نام فعال می‌کند و ایمیل تأیید نمی‌فرستد. همچنین
+`CREDIT_PURCHASE_ENABLED=false` ساخت سفارش، شروع پرداخت و webhook پرداخت را
+غیرفعال می‌کند؛ افزایش موجودی فقط از مسیر محافظت‌شده ادمین انجام می‌شود.
 
 بقیه مقادیر را دقیقاً از `.env.production.example` اضافه کنید، چون validation
 برنامه تعدادی از آن‌ها را الزامی می‌داند. متغیر `PORT` لازم نیست؛ Vercel آن را
