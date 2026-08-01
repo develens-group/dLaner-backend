@@ -51,7 +51,14 @@ describe('Application (e2e)', () => {
   });
 
   it('serves Swagger UI and its OpenAPI document', async () => {
-    await request(app.getHttpServer()).get('/api/docs').expect(200);
+    const page = await request(app.getHttpServer())
+      .get('/api/docs')
+      .expect(200);
+    expect(page.text).toContain('swagger-ui-dist@5.32.8');
+    await request(app.getHttpServer())
+      .get('/api/docs/dlander-swagger-init.js')
+      .expect('Content-Type', /application\/javascript/)
+      .expect(200);
     const document = await request(app.getHttpServer())
       .get('/api/docs-json')
       .expect(200);

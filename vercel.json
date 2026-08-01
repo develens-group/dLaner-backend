@@ -1,9 +1,4 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "regions": ["fra1"],
-  "functions": {
-    "src/main.ts": {
-      "includeFiles": "node_modules/swagger-ui-dist/**"
-    }
-  }
+  "regions": ["fra1"]
 }

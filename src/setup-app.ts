@@ -9,7 +9,15 @@ import { HttpExceptionFilter } from './common/http-exception.filter';
 export function setupApplication(app: NestExpressApplication) {
   const config = app.get(ConfigService);
   app.set('trust proxy', config.get<number>('TRUST_PROXY', 1));
-  app.use(helmet());
+  app.use(
+    helmet({
+      contentSecurityPolicy: {
+        directives: {
+          scriptSrc: ["'self'", 'https://cdn.jsdelivr.net'],
+        },
+      },
+    }),
+  );
   app.use(cookieParser());
   app.useGlobalPipes(
     new ValidationPipe({
@@ -44,6 +52,8 @@ export function setupApplication(app: NestExpressApplication) {
   const document = SwaggerModule.createDocument(app, swaggerConfig);
   documentResponseDetails(document);
   SwaggerModule.setup('api/docs', app, document, {
+    ui: false,
+    raw: ['json'],
     swaggerOptions: {
       persistAuthorization:
         config.get('NODE_ENV', 'development') === 'development',

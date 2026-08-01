@@ -23,5 +23,10 @@ describe('AppController', () => {
     it('returns the landing page stylesheet', () => {
       expect(appController.stylesheet()).toContain('.card');
     });
+
+    it('returns a CDN-backed Swagger page and local initializer', () => {
+      expect(appController.swaggerPage()).toContain('swagger-ui-dist@5.32.8');
+      expect(appController.swaggerInitializer()).toContain('/api/docs-json');
+    });
   });
 });

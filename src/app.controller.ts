@@ -19,4 +19,18 @@ export class AppController {
   stylesheet(): string {
     return this.appService.getStylesheet();
   }
+
+  @Get('api/docs')
+  @Public()
+  @Header('Content-Type', 'text/html; charset=utf-8')
+  swaggerPage(): string {
+    return this.appService.getSwaggerPage();
+  }
+
+  @Get('api/docs/dlander-swagger-init.js')
+  @Public()
+  @Header('Content-Type', 'application/javascript; charset=utf-8')
+  swaggerInitializer(): string {
+    return this.appService.getSwaggerInitializer();
+  }
 }
