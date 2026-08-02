@@ -18,6 +18,7 @@ import { RequestTrackingMiddleware } from './request-tracking/request-tracking.m
 import { AiModule } from './ai/ai.module';
 import { CreditsModule } from './credits/credits.module';
 import { HealthController } from './health.controller';
+import { TemplatesModule } from './templates/templates.module';
 
 @Module({
   imports: [
@@ -32,6 +33,7 @@ import { HealthController } from './health.controller';
     RequestTrackingModule,
     CreditsModule,
     AiModule,
+    TemplatesModule,
   ],
   controllers: [AppController, HealthController],
   providers: [

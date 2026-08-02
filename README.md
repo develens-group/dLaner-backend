@@ -276,6 +276,8 @@ No raw card data, CVV, payment token, signature, API key, or provider secret is 
 
 ## Local API testing
 
+The production template-library module, storage settings, owner/reviewer workflow, frontend contract, and legacy importer are documented in [docs/TEMPLATES.md](docs/TEMPLATES.md).
+
 ### 1. Start PostgreSQL and Mailpit
 
 Install Docker Desktop, ensure its engine is running, then execute from the repository root:

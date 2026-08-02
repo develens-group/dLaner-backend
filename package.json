@@ -25,11 +25,14 @@
     "test:e2e:cov": "npm run test:db:reset && jest --config ./test/jest-e2e.json --coverage --runInBand",
     "test:db:reset": "node scripts/test-db-reset.cjs",
     "retention:cleanup": "ts-node src/maintenance/retention.ts"
+    ,"templates:import": "ts-node scripts/import-templates.ts"
   },
   "engines": {
     "node": "22.x"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1101.0",
+    "@aws-sdk/s3-request-presigner": "^3.1101.0",
     "@nestjs/common": "^11.0.1",
     "@nestjs/config": "^4.0.4",
     "@nestjs/core": "^11.0.1",

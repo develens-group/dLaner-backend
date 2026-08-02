@@ -9,8 +9,41 @@ datasource db {
 
 enum UserRole {
   USER
+  REVIEWER
   ADMIN
   SUPER_ADMIN
+}
+
+enum TemplateVisibility {
+  PRIVATE
+  UNLISTED
+  PUBLIC
+}
+
+enum TemplateReviewStatus {
+  DRAFT
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum TemplateLifecycleStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+enum TemplateReviewAction {
+  SUBMITTED
+  APPROVED
+  REJECTED
+  CHANGES_REQUESTED
+  UNPUBLISHED
+}
+
+enum TemplateMetricType {
+  DOWNLOAD
+  VIEW
+  INSTALL
 }
 
 enum UserStatus {
@@ -87,31 +120,166 @@ enum PaymentAttemptStatus {
 }
 
 model User {
-  id                String                   @id @default(uuid()) @db.Uuid
-  email             String                   @unique @db.VarChar(320)
-  passwordHash      String
-  displayName       String?                  @db.VarChar(100)
-  role              UserRole                 @default(USER)
-  status            UserStatus               @default(PENDING_VERIFICATION)
-  emailVerifiedAt   DateTime?
-  lastLoginAt       DateTime?
-  createdAt         DateTime                 @default(now())
-  updatedAt         DateTime                 @updatedAt
-  deletedAt         DateTime?
-  sessions          Session[]
-  verificationTokens EmailVerificationToken[]
+  id                  String                   @id @default(uuid()) @db.Uuid
+  email               String                   @unique @db.VarChar(320)
+  passwordHash        String
+  displayName         String?                  @db.VarChar(100)
+  role                UserRole                 @default(USER)
+  status              UserStatus               @default(PENDING_VERIFICATION)
+  emailVerifiedAt     DateTime?
+  lastLoginAt         DateTime?
+  createdAt           DateTime                 @default(now())
+  updatedAt           DateTime                 @updatedAt
+  deletedAt           DateTime?
+  sessions            Session[]
+  verificationTokens  EmailVerificationToken[]
   passwordResetTokens PasswordResetToken[]
-  apiRequests       ApiRequestRecord[]
-  aiRequests        AiRequest[]
-  auditLogs         AuditLog[]                @relation("AuditActor")
-  creditAccount     CreditAccount?
-  creditLedger      CreditLedgerEntry[]       @relation("LedgerOwner")
-  createdCreditLedger CreditLedgerEntry[]     @relation("LedgerCreator")
-  creditReservations CreditReservation[]
-  creditOrders      CreditPurchaseOrder[]
+  apiRequests         ApiRequestRecord[]
+  aiRequests          AiRequest[]
+  auditLogs           AuditLog[]               @relation("AuditActor")
+  creditAccount       CreditAccount?
+  creditLedger        CreditLedgerEntry[]      @relation("LedgerOwner")
+  createdCreditLedger CreditLedgerEntry[]      @relation("LedgerCreator")
+  creditReservations  CreditReservation[]
+  creditOrders        CreditPurchaseOrder[]
+  templates           Template[]               @relation("TemplateOwner")
+  templateVersions    TemplateVersion[]        @relation("TemplateVersionCreator")
+  templateReviews     TemplateReview[]         @relation("TemplateReviewer")
+  templateMetrics     TemplateMetric[]
 
   @@index([status])
   @@index([createdAt])
+}
+
+model Template {
+  id               String                  @id @default(uuid()) @db.Uuid
+  slug             String                  @unique @db.VarChar(100)
+  ownerId          String                  @db.Uuid
+  title            String                  @db.VarChar(150)
+  description      String?                 @db.VarChar(2000)
+  visibility       TemplateVisibility      @default(PRIVATE)
+  reviewStatus     TemplateReviewStatus    @default(DRAFT)
+  lifecycleStatus  TemplateLifecycleStatus @default(ACTIVE)
+  currentVersionId String?                 @unique @db.Uuid
+  categoryId       String?                 @db.Uuid
+  tags             String[]                @default([])
+  rejectionReason  String?                 @db.VarChar(1000)
+  submittedAt      DateTime?
+  approvedAt       DateTime?
+  publishedAt      DateTime?
+  createdAt        DateTime                @default(now())
+  updatedAt        DateTime                @updatedAt
+  deletedAt        DateTime?
+  owner            User                    @relation("TemplateOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+  category         TemplateCategory?       @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  currentVersion   TemplateVersion?        @relation("CurrentTemplateVersion", fields: [currentVersionId], references: [id], onDelete: SetNull)
+  versions         TemplateVersion[]       @relation("TemplateVersions")
+  reviews          TemplateReview[]
+  shares           TemplateShare[]
+  metrics          TemplateMetric[]
+
+  @@index([ownerId, deletedAt, updatedAt])
+  @@index([visibility, reviewStatus, lifecycleStatus, publishedAt])
+  @@index([categoryId, publishedAt])
+}
+
+model TemplateVersion {
+  id                   String         @id @default(uuid()) @db.Uuid
+  templateId           String         @db.Uuid
+  versionNumber        Int
+  changelog            String?        @db.VarChar(1000)
+  libraryType          String         @db.VarChar(100)
+  librarySchemaVersion Int            @default(2)
+  source               String         @db.VarChar(500)
+  itemCount            Int
+  manifestStorageKey   String         @db.VarChar(500)
+  bundleStorageKey     String?        @db.VarChar(500)
+  previewStorageKey    String?        @db.VarChar(500)
+  contentHash          String         @db.VarChar(64)
+  bundleSize           Int?
+  createdById          String         @db.Uuid
+  immutable            Boolean        @default(false)
+  createdAt            DateTime       @default(now())
+  template             Template       @relation("TemplateVersions", fields: [templateId], references: [id], onDelete: Restrict)
+  currentFor           Template?      @relation("CurrentTemplateVersion")
+  createdBy            User           @relation("TemplateVersionCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  items                TemplateItem[]
+
+  @@unique([templateId, versionNumber])
+  @@index([templateId, createdAt])
+  @@index([contentHash])
+}
+
+model TemplateItem {
+  id                String          @id @default(uuid()) @db.Uuid
+  templateVersionId String          @db.Uuid
+  externalId        String          @db.VarChar(150)
+  name              String?         @db.VarChar(150)
+  description       String?         @db.VarChar(1000)
+  category          String?         @db.VarChar(100)
+  form              String?         @db.VarChar(100)
+  sortOrder         Int
+  elementsJson      Json
+  previewStorageKey String?         @db.VarChar(500)
+  contentHash       String          @db.VarChar(64)
+  createdAt         DateTime        @default(now())
+  version           TemplateVersion @relation(fields: [templateVersionId], references: [id], onDelete: Cascade)
+
+  @@unique([templateVersionId, externalId])
+  @@index([category, form])
+}
+
+model TemplateCategory {
+  id          String     @id @default(uuid()) @db.Uuid
+  slug        String     @unique @db.VarChar(100)
+  name        String     @db.VarChar(100)
+  description String?    @db.VarChar(500)
+  sortOrder   Int        @default(0)
+  isActive    Boolean    @default(true)
+  templates   Template[]
+
+  @@index([isActive, sortOrder])
+}
+
+model TemplateReview {
+  id         String               @id @default(uuid()) @db.Uuid
+  templateId String               @db.Uuid
+  reviewerId String?              @db.Uuid
+  action     TemplateReviewAction
+  comment    String?              @db.VarChar(1000)
+  createdAt  DateTime             @default(now())
+  template   Template             @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  reviewer   User?                @relation("TemplateReviewer", fields: [reviewerId], references: [id], onDelete: SetNull)
+
+  @@index([templateId, createdAt])
+}
+
+model TemplateShare {
+  id         String    @id @default(uuid()) @db.Uuid
+  templateId String    @db.Uuid
+  tokenHash  String    @unique @db.VarChar(64)
+  expiresAt  DateTime?
+  maxUses    Int?
+  useCount   Int       @default(0)
+  revokedAt  DateTime?
+  createdAt  DateTime  @default(now())
+  template   Template  @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  @@index([templateId, revokedAt])
+}
+
+model TemplateMetric {
+  id          String             @id @default(uuid()) @db.Uuid
+  templateId  String             @db.Uuid
+  userId      String?            @db.Uuid
+  type        TemplateMetricType
+  visitorHash String?            @db.VarChar(64)
+  dedupeKey   String             @unique @db.VarChar(64)
+  createdAt   DateTime           @default(now())
+  template    Template           @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  user        User?              @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([templateId, type, createdAt])
 }
 
 model ApiRequestRecord {
@@ -148,41 +316,41 @@ model ApiRequestRecord {
 }
 
 model AiRequest {
-  id                    String          @id @default(uuid()) @db.Uuid
-  requestId             String?         @db.VarChar(128)
-  userId                String          @db.Uuid
-  idempotencyKey        String?         @db.VarChar(128)
-  provider              String          @db.VarChar(100)
-  model                 String          @db.VarChar(100)
-  operation             AiOperation
-  status                AiRequestStatus @default(CREATED)
-  inputJson              Json?
-  inputHash              String          @db.VarChar(64)
-  inputOmitted           Boolean         @default(false)
-  inputTruncated         Boolean         @default(false)
-  inputRedacted          Boolean         @default(false)
-  outputJson             Json?
-  outputOmitted          Boolean         @default(false)
-  outputTruncated        Boolean         @default(false)
-  outputRedacted         Boolean         @default(false)
-  providerRequestId      String?         @db.VarChar(255)
-  promptTokens           Int?
-  completionTokens       Int?
-  totalTokens            Int?
-  estimatedCreditCost    Int?
-  chargedCreditAmount    Int?
-  creditReservationId   String?         @db.Uuid
-  actualCreditCost      Int?
-  creditChargedAt       DateTime?
-  latencyMs              Int?
-  errorCode              String?         @db.VarChar(100)
-  errorMessage           String?         @db.VarChar(500)
-  startedAt              DateTime
-  completedAt            DateTime?
-  createdAt              DateTime        @default(now())
-  updatedAt              DateTime        @updatedAt
-  user                   User            @relation(fields: [userId], references: [id], onDelete: Restrict)
-  creditReservation      CreditReservation? @relation(fields: [creditReservationId], references: [id], onDelete: SetNull)
+  id                  String             @id @default(uuid()) @db.Uuid
+  requestId           String?            @db.VarChar(128)
+  userId              String             @db.Uuid
+  idempotencyKey      String?            @db.VarChar(128)
+  provider            String             @db.VarChar(100)
+  model               String             @db.VarChar(100)
+  operation           AiOperation
+  status              AiRequestStatus    @default(CREATED)
+  inputJson           Json?
+  inputHash           String             @db.VarChar(64)
+  inputOmitted        Boolean            @default(false)
+  inputTruncated      Boolean            @default(false)
+  inputRedacted       Boolean            @default(false)
+  outputJson          Json?
+  outputOmitted       Boolean            @default(false)
+  outputTruncated     Boolean            @default(false)
+  outputRedacted      Boolean            @default(false)
+  providerRequestId   String?            @db.VarChar(255)
+  promptTokens        Int?
+  completionTokens    Int?
+  totalTokens         Int?
+  estimatedCreditCost Int?
+  chargedCreditAmount Int?
+  creditReservationId String?            @db.Uuid
+  actualCreditCost    Int?
+  creditChargedAt     DateTime?
+  latencyMs           Int?
+  errorCode           String?            @db.VarChar(100)
+  errorMessage        String?            @db.VarChar(500)
+  startedAt           DateTime
+  completedAt         DateTime?
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+  user                User               @relation(fields: [userId], references: [id], onDelete: Restrict)
+  creditReservation   CreditReservation? @relation(fields: [creditReservationId], references: [id], onDelete: SetNull)
 
   @@unique([userId, idempotencyKey])
   @@index([userId, createdAt])
@@ -193,16 +361,16 @@ model AiRequest {
 }
 
 model CreditAccount {
-  id                String   @id @default(uuid()) @db.Uuid
-  userId            String   @unique @db.Uuid
-  availableBalance  Int      @default(0)
-  reservedBalance   Int      @default(0)
-  lifetimePurchased Int      @default(0)
-  lifetimeConsumed  Int      @default(0)
-  version           Int      @default(0)
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
-  user              User     @relation(fields: [userId], references: [id], onDelete: Restrict)
+  id                String              @id @default(uuid()) @db.Uuid
+  userId            String              @unique @db.Uuid
+  availableBalance  Int                 @default(0)
+  reservedBalance   Int                 @default(0)
+  lifetimePurchased Int                 @default(0)
+  lifetimeConsumed  Int                 @default(0)
+  version           Int                 @default(0)
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  user              User                @relation(fields: [userId], references: [id], onDelete: Restrict)
   ledgerEntries     CreditLedgerEntry[]
   reservations      CreditReservation[]
 
@@ -210,26 +378,26 @@ model CreditAccount {
 }
 
 model CreditLedgerEntry {
-  id                     String           @id @default(uuid()) @db.Uuid
-  accountId              String           @db.Uuid
-  userId                 String           @db.Uuid
-  type                   CreditLedgerType
-  amount                 Int
-  availableDelta         Int
-  reservedDelta          Int
-  availableBalanceAfter  Int
-  reservedBalanceAfter   Int
-  referenceType          String           @db.VarChar(100)
-  referenceId            String?          @db.VarChar(255)
-  idempotencyKey         String?          @db.VarChar(128)
-  requestHash            String?          @db.VarChar(64)
-  description            String?          @db.VarChar(500)
-  metadataJson           Json?
-  createdByUserId        String?          @db.Uuid
-  createdAt              DateTime         @default(now())
-  account                CreditAccount    @relation(fields: [accountId], references: [id], onDelete: Restrict)
-  user                   User             @relation("LedgerOwner", fields: [userId], references: [id], onDelete: Restrict)
-  createdBy              User?            @relation("LedgerCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  id                    String           @id @default(uuid()) @db.Uuid
+  accountId             String           @db.Uuid
+  userId                String           @db.Uuid
+  type                  CreditLedgerType
+  amount                Int
+  availableDelta        Int
+  reservedDelta         Int
+  availableBalanceAfter Int
+  reservedBalanceAfter  Int
+  referenceType         String           @db.VarChar(100)
+  referenceId           String?          @db.VarChar(255)
+  idempotencyKey        String?          @db.VarChar(128)
+  requestHash           String?          @db.VarChar(64)
+  description           String?          @db.VarChar(500)
+  metadataJson          Json?
+  createdByUserId       String?          @db.Uuid
+  createdAt             DateTime         @default(now())
+  account               CreditAccount    @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  user                  User             @relation("LedgerOwner", fields: [userId], references: [id], onDelete: Restrict)
+  createdBy             User?            @relation("LedgerCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
 
   @@unique([userId, type, idempotencyKey])
   @@index([accountId, createdAt])
@@ -289,29 +457,29 @@ model CreditPackage {
 }
 
 model CreditPurchaseOrder {
-  id                 String            @id @default(uuid()) @db.Uuid
-  userId             String            @db.Uuid
-  packageId          String            @db.Uuid
-  status             CreditOrderStatus @default(CREATED)
-  creditAmount       Int
-  bonusCreditAmount  Int
-  totalCreditAmount  Int
-  priceMinor         Int
-  currency           String            @db.VarChar(3)
-  paymentProvider    String            @db.VarChar(100)
-  providerPaymentId  String?           @db.VarChar(255)
-  idempotencyKey     String            @db.VarChar(128)
-  requestHash        String            @db.VarChar(64)
-  paidAt             DateTime?
-  failedAt           DateTime?
-  cancelledAt        DateTime?
-  expiresAt          DateTime?
-  metadataJson       Json?
-  createdAt          DateTime          @default(now())
-  updatedAt          DateTime          @updatedAt
-  user               User              @relation(fields: [userId], references: [id], onDelete: Restrict)
-  package            CreditPackage     @relation(fields: [packageId], references: [id], onDelete: Restrict)
-  paymentAttempts    PaymentAttempt[]
+  id                String            @id @default(uuid()) @db.Uuid
+  userId            String            @db.Uuid
+  packageId         String            @db.Uuid
+  status            CreditOrderStatus @default(CREATED)
+  creditAmount      Int
+  bonusCreditAmount Int
+  totalCreditAmount Int
+  priceMinor        Int
+  currency          String            @db.VarChar(3)
+  paymentProvider   String            @db.VarChar(100)
+  providerPaymentId String?           @db.VarChar(255)
+  idempotencyKey    String            @db.VarChar(128)
+  requestHash       String            @db.VarChar(64)
+  paidAt            DateTime?
+  failedAt          DateTime?
+  cancelledAt       DateTime?
+  expiresAt         DateTime?
+  metadataJson      Json?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  user              User              @relation(fields: [userId], references: [id], onDelete: Restrict)
+  package           CreditPackage     @relation(fields: [packageId], references: [id], onDelete: Restrict)
+  paymentAttempts   PaymentAttempt[]
 
   @@unique([userId, idempotencyKey])
   @@index([userId, createdAt])
@@ -340,16 +508,16 @@ model PaymentAttempt {
 }
 
 model PaymentWebhookEvent {
-  id              String   @id @default(uuid()) @db.Uuid
-  provider        String   @db.VarChar(100)
-  providerEventId String   @db.VarChar(255)
-  eventType       String   @db.VarChar(100)
+  id              String    @id @default(uuid()) @db.Uuid
+  provider        String    @db.VarChar(100)
+  providerEventId String    @db.VarChar(255)
+  eventType       String    @db.VarChar(100)
   signatureValid  Boolean
-  payloadHash     String   @db.VarChar(64)
+  payloadHash     String    @db.VarChar(64)
   payloadJson     Json?
   processedAt     DateTime?
-  processingError String?  @db.VarChar(500)
-  createdAt       DateTime @default(now())
+  processingError String?   @db.VarChar(500)
+  createdAt       DateTime  @default(now())
 
   @@unique([provider, providerEventId])
   @@index([createdAt])
