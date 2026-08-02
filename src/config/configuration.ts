@@ -50,6 +50,14 @@ class Environment {
   @IsInt() @Min(0) AI_CREDIT_INPUT_UNIT_COST = 1;
   @IsInt() @Min(1) AI_CREDIT_OUTPUT_UNIT_BYTES = 4096;
   @IsInt() @Min(0) AI_CREDIT_OUTPUT_UNIT_COST = 0;
+  @IsIn(['local', 's3']) TEMPLATE_STORAGE_DRIVER = 'local';
+  @IsString() TEMPLATE_STORAGE_LOCAL_PATH = '.data/templates';
+  @IsString() TEMPLATE_LIBRARY_TYPE = 'dlanderlib';
+  @IsInt() @Min(1024) TEMPLATE_MAX_BUNDLE_BYTES = 5000000;
+  @IsInt() @Min(1) TEMPLATE_MAX_ITEMS = 100;
+  @IsInt() @Min(1) TEMPLATE_MAX_ELEMENTS_PER_ITEM = 2000;
+  @IsUrl({ require_tld: false }) TEMPLATE_SHARE_BASE_URL =
+    'http://localhost:3000';
 }
 
 export function validateEnvironment(values: Record<string, unknown>) {
@@ -71,6 +79,9 @@ export function validateEnvironment(values: Record<string, unknown>) {
     'AI_CREDIT_INPUT_UNIT_COST',
     'AI_CREDIT_OUTPUT_UNIT_BYTES',
     'AI_CREDIT_OUTPUT_UNIT_COST',
+    'TEMPLATE_MAX_BUNDLE_BYTES',
+    'TEMPLATE_MAX_ITEMS',
+    'TEMPLATE_MAX_ELEMENTS_PER_ITEM',
   ] as const;
   const normalized: Record<string, unknown> = { ...values };
   for (const key of numericKeys) {

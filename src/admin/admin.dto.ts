@@ -1,6 +1,6 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform, Type } from 'class-transformer';
-import { IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
+import { IsIn, IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
 
 export class UserQueryDto {
   @ApiPropertyOptional({ example: 1, default: 1, minimum: 1, type: Number })
@@ -31,4 +31,13 @@ export class UserQueryDto {
   )
   @IsString()
   search?: string;
+}
+
+export class DashboardQueryDto {
+  @ApiPropertyOptional({ enum: [7, 30, 90], default: 30 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @IsIn([7, 30, 90])
+  days = 30;
 }
