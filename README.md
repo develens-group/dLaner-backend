@@ -278,6 +278,8 @@ No raw card data, CVV, payment token, signature, API key, or provider secret is 
 
 The production template-library module, storage settings, owner/reviewer workflow, frontend contract, and legacy importer are documented in [docs/TEMPLATES.md](docs/TEMPLATES.md).
 
+The admin frontend can bootstrap its overview from `GET /api/v1/admin/dashboard?days=30`; template moderation and category CRUD contracts are documented in the same guide.
+
 ### 1. Start PostgreSQL and Mailpit
 
 Install Docker Desktop, ensure its engine is running, then execute from the repository root:

@@ -14,6 +14,14 @@ For development use `TEMPLATE_STORAGE_DRIVER=local` and `TEMPLATE_STORAGE_LOCAL_
 
 The frontend index response is `{data: items, meta: pagination}`. Each item contains its category (use `category.slug` as `tabId`), current version/items and stable download URL. Frontends may adapt it to `{tabs,items,pagination}` without accessing storage keys.
 
+## Admin panel
+
+`GET /api/v1/admin/dashboard?days=30` (allowed values: 7, 30, 90) returns one snapshot containing user/status/role counts, active sessions, request volume and error rate, AI states, template review/visibility/event counts, orders/revenue, credit balances, audit volume, a gap-free daily trend, and recent users/templates/orders. Monetary values are integer minor units and must be formatted using each order's currency.
+
+The management table uses `GET /api/v1/admin/templates` with the public pagination/search/category/tag/form filters plus `reviewStatus` and `visibility`. Reviewers can moderate; only ADMIN/SUPER_ADMIN can archive, restore, or soft-delete through `/api/v1/admin/templates/:id/{archive|restore}` and `DELETE /api/v1/admin/templates/:id`.
+
+Categories are managed at `/api/v1/admin/template-categories` with GET, POST, PATCH and DELETE. Deleting a category that is already referenced safely deactivates it; an unused category is removed. All administrative mutations produce audit events.
+
 ## Legacy import
 
 Run `npm run templates:import -- --path=C:\safe\legacy --owner=<user-uuid> --dry-run`; remove `--dry-run` to import `.dlanderlib` files as drafts, or add `--pending`. The command confines reads to the supplied root, parses UTF-8 JSON, validates every library, reports failures and creates server-generated storage keys. Re-running does not mutate published versions; operators should use dry-run first and archive duplicates reported by content hash.

@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
   AdminTemplatesController,
+  AdminTemplateCategoriesController,
   PublicTemplatesController,
   TemplateCategoriesController,
   TemplatesController,
@@ -20,6 +21,7 @@ import { TemplatesService } from './templates.service';
     TemplateSharesController,
     TemplateCategoriesController,
     AdminTemplatesController,
+    AdminTemplateCategoriesController,
   ],
   providers: [
     {

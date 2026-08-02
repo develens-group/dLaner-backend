@@ -2,6 +2,7 @@ import { Transform, Type } from 'class-transformer';
 import {
   ArrayMaxSize,
   IsArray,
+  IsBoolean,
   IsDate,
   IsEnum,
   IsIn,
@@ -17,7 +18,11 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { PartialType } from '@nestjs/swagger';
-import { TemplateMetricType, TemplateVisibility } from '@prisma/client';
+import {
+  TemplateMetricType,
+  TemplateReviewStatus,
+  TemplateVisibility,
+} from '@prisma/client';
 
 export class LibraryItemDto {
   @IsString() @MaxLength(150) id!: string;
@@ -86,4 +91,26 @@ export class ListTemplatesDto {
   @IsIn(['newest', 'updated', 'popular', 'mostDownloaded', 'title'])
   sort: 'newest' | 'updated' | 'popular' | 'mostDownloaded' | 'title' =
     'newest';
+}
+
+export class AdminTemplateQueryDto extends ListTemplatesDto {
+  @IsOptional()
+  @IsEnum(TemplateReviewStatus)
+  reviewStatus?: TemplateReviewStatus;
+  @IsOptional() @IsEnum(TemplateVisibility) visibility?: TemplateVisibility;
+}
+
+export class CreateTemplateCategoryDto {
+  @IsString()
+  @Matches(/^[a-z0-9]+(?:-[a-z0-9]+)*$/)
+  @MaxLength(100)
+  slug!: string;
+  @IsString() @MaxLength(100) name!: string;
+  @IsOptional() @IsString() @MaxLength(500) description?: string;
+  @IsOptional() @IsInt() @Min(0) @Max(10000) sortOrder?: number;
+}
+export class UpdateTemplateCategoryDto extends PartialType(
+  CreateTemplateCategoryDto,
+) {
+  @IsOptional() @IsBoolean() isActive?: boolean;
 }

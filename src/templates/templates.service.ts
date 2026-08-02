@@ -20,10 +20,13 @@ import type { ObjectStorageService } from './template-storage';
 import { Inject } from '@nestjs/common';
 import {
   CreateTemplateDto,
+  CreateTemplateCategoryDto,
   CreateVersionDto,
+  AdminTemplateQueryDto,
   ListTemplatesDto,
   ShareDto,
   UpdateTemplateDto,
+  UpdateTemplateCategoryDto,
 } from './templates.dto';
 
 const sha256 = (value: Buffer | string) =>
@@ -612,5 +615,116 @@ export class TemplatesService {
   }
   reviewQueue(q: ListTemplatesDto) {
     return this.page({ deletedAt: null, reviewStatus: 'PENDING' }, q, true);
+  }
+  adminList(q: AdminTemplateQueryDto) {
+    return this.page(
+      {
+        deletedAt: null,
+        reviewStatus: q.reviewStatus,
+        visibility: q.visibility,
+      },
+      q,
+      true,
+    );
+  }
+  async adminLifecycle(id: string, archived: boolean) {
+    const template = await this.prisma.template.findFirst({
+      where: { id, deletedAt: null },
+    });
+    if (!template)
+      throw new NotFoundException({
+        code: 'TEMPLATE_NOT_FOUND',
+        message: 'Template not found',
+      });
+    return this.prisma.template.update({
+      where: { id },
+      data: { lifecycleStatus: archived ? 'ARCHIVED' : 'ACTIVE' },
+    });
+  }
+  async adminRemove(id: string) {
+    const result = await this.prisma.template.updateMany({
+      where: { id, deletedAt: null },
+      data: {
+        deletedAt: new Date(),
+        lifecycleStatus: 'ARCHIVED',
+        visibility: 'PRIVATE',
+      },
+    });
+    if (!result.count)
+      throw new NotFoundException({
+        code: 'TEMPLATE_NOT_FOUND',
+        message: 'Template not found',
+      });
+    return { id, deleted: true };
+  }
+  adminCategories() {
+    return this.prisma.templateCategory.findMany({
+      orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+      include: { _count: { select: { templates: true } } },
+    });
+  }
+  async createCategory(dto: CreateTemplateCategoryDto) {
+    try {
+      return await this.prisma.templateCategory.create({
+        data: {
+          ...dto,
+          slug: dto.slug.toLowerCase(),
+          name: dto.name.trim(),
+          description: dto.description?.trim(),
+        },
+      });
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      )
+        throw new ConflictException({
+          code: 'TEMPLATE_CATEGORY_CONFLICT',
+          message: 'Category slug already exists',
+        });
+      throw error;
+    }
+  }
+  async updateCategory(id: string, dto: UpdateTemplateCategoryDto) {
+    try {
+      return await this.prisma.templateCategory.update({
+        where: { id },
+        data: {
+          ...dto,
+          slug: dto.slug?.toLowerCase(),
+          name: dto.name?.trim(),
+          description: dto.description?.trim(),
+        },
+      });
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2025'
+      )
+        throw new NotFoundException('Template category not found');
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      )
+        throw new ConflictException({
+          code: 'TEMPLATE_CATEGORY_CONFLICT',
+          message: 'Category slug already exists',
+        });
+      throw error;
+    }
+  }
+  async deleteCategory(id: string) {
+    const category = await this.prisma.templateCategory.findUnique({
+      where: { id },
+      include: { _count: { select: { templates: true } } },
+    });
+    if (!category) throw new NotFoundException('Template category not found');
+    if (category._count.templates)
+      return this.prisma.templateCategory.update({
+        where: { id },
+        data: { isActive: false },
+      });
+    await this.prisma.templateCategory.delete({ where: { id } });
+    return { id, deleted: true };
   }
 }

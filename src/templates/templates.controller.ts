@@ -17,16 +17,20 @@ import { Throttle } from '@nestjs/throttler';
 import type { Request, Response } from 'express';
 import { UserRole } from '@prisma/client';
 import { response } from '../common/api-response';
+import { AuditService } from '../audit/audit.service';
 import type { AccessPrincipal } from '../common/auth.types';
 import { CurrentUser, Public, Roles } from '../common/decorators';
 import {
   CreateTemplateDto,
+  CreateTemplateCategoryDto,
   CreateVersionDto,
+  AdminTemplateQueryDto,
   EventDto,
   ListTemplatesDto,
   ReviewDto,
   ShareDto,
   UpdateTemplateDto,
+  UpdateTemplateCategoryDto,
 } from './templates.dto';
 import { TemplatesService } from './templates.service';
 
@@ -194,7 +198,14 @@ export class TemplateCategoriesController {
 @Roles(UserRole.REVIEWER, UserRole.ADMIN, UserRole.SUPER_ADMIN)
 @Controller('api/v1/admin/templates')
 export class AdminTemplatesController {
-  constructor(private readonly s: TemplatesService) {}
+  constructor(
+    private readonly s: TemplatesService,
+    private readonly audit: AuditService,
+  ) {}
+  @Get() async all(@Query() q: AdminTemplateQueryDto) {
+    const x = await this.s.adminList(q);
+    return response(x.items, x.pagination);
+  }
   @Get('review-queue') async queue(@Query() q: ListTemplatesDto) {
     return response(await this.s.reviewQueue(q));
   }
@@ -223,7 +234,37 @@ export class AdminTemplatesController {
     @CurrentUser() u: AccessPrincipal,
     @Param('id', ParseUUIDPipe) id: string,
   ) {
-    return response(await this.s.unpublish(u.userId, id));
+    const result = await this.s.unpublish(u.userId, id);
+    this.audit.record('template.unpublished', u.userId, id, 'Template');
+    return response(result);
+  }
+  @Post(':id/archive')
+  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
+  async archive(
+    @CurrentUser() u: AccessPrincipal,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    const result = await this.s.adminLifecycle(id, true);
+    this.audit.record('template.archived_by_admin', u.userId, id, 'Template');
+    return response(result);
+  }
+  @Post(':id/restore')
+  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
+  async restore(
+    @CurrentUser() u: AccessPrincipal,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    const result = await this.s.adminLifecycle(id, false);
+    this.audit.record('template.restored_by_admin', u.userId, id, 'Template');
+    return response(result);
+  }
+  @Delete(':id') @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN) async remove(
+    @CurrentUser() u: AccessPrincipal,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    const result = await this.s.adminRemove(id);
+    this.audit.record('template.deleted_by_admin', u.userId, id, 'Template');
+    return response(result);
   }
   private async go(
     u: AccessPrincipal,
@@ -231,6 +272,68 @@ export class AdminTemplatesController {
     a: 'APPROVED' | 'REJECTED' | 'CHANGES_REQUESTED',
     c?: string,
   ) {
-    return response(await this.s.review(u.userId, u.role, id, a, c));
+    const result = await this.s.review(u.userId, u.role, id, a, c);
+    this.audit.record(
+      `template.${a.toLowerCase()}`,
+      u.userId,
+      id,
+      'Template',
+      c ? { comment: c } : undefined,
+    );
+    return response(result);
+  }
+}
+
+@ApiTags('admin-template-categories')
+@ApiBearerAuth()
+@Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
+@Controller('api/v1/admin/template-categories')
+export class AdminTemplateCategoriesController {
+  constructor(
+    private readonly s: TemplatesService,
+    private readonly audit: AuditService,
+  ) {}
+  @Get() async list() {
+    return response(await this.s.adminCategories());
+  }
+  @Post() async create(
+    @CurrentUser() u: AccessPrincipal,
+    @Body() dto: CreateTemplateCategoryDto,
+  ) {
+    const item = await this.s.createCategory(dto);
+    this.audit.record(
+      'template_category.created',
+      u.userId,
+      item.id,
+      'TemplateCategory',
+    );
+    return response(item);
+  }
+  @Patch(':id') async update(
+    @CurrentUser() u: AccessPrincipal,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateTemplateCategoryDto,
+  ) {
+    const item = await this.s.updateCategory(id, dto);
+    this.audit.record(
+      'template_category.updated',
+      u.userId,
+      id,
+      'TemplateCategory',
+    );
+    return response(item);
+  }
+  @Delete(':id') async remove(
+    @CurrentUser() u: AccessPrincipal,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    const item = await this.s.deleteCategory(id);
+    this.audit.record(
+      'template_category.deleted',
+      u.userId,
+      id,
+      'TemplateCategory',
+    );
+    return response(item);
   }
 }
