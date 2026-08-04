@@ -1,4 +1,6 @@
-import { Controller, Get, Header } from '@nestjs/common';
+import { Controller, Get, Header, Res } from '@nestjs/common';
+import type { Response } from 'express';
+import { join } from 'node:path';
 import { Public } from './common/decorators';
 import { AppService } from './app.service';
 
@@ -32,5 +34,26 @@ export class AppController {
   @Header('Content-Type', 'application/javascript; charset=utf-8')
   swaggerInitializer(): string {
     return this.appService.getSwaggerInitializer();
+  }
+
+  @Get('docs/Dlander-React-Authentication-FA.pdf')
+  @Public()
+  reactAuthenticationGuide(@Res() res: Response) {
+    return this.sendPdf(res, 'Dlander-React-Authentication-FA.pdf');
+  }
+
+  @Get('docs/Dlander-WordPress-Authentication-FA.pdf')
+  @Public()
+  wordpressAuthenticationGuide(@Res() res: Response) {
+    return this.sendPdf(res, 'Dlander-WordPress-Authentication-FA.pdf');
+  }
+
+  private sendPdf(res: Response, filename: string) {
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `inline; filename="${filename}"`,
+      'Cache-Control': 'public, max-age=3600, immutable',
+    });
+    return res.sendFile(join(__dirname, 'assets', 'docs', filename));
   }
 }
