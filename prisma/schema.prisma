@@ -546,20 +546,20 @@ model AuditLog {
 }
 
 model Session {
-  id               String    @id @default(uuid()) @db.Uuid
-  userId           String    @db.Uuid
+  id               String            @id @default(uuid()) @db.Uuid
+  userId           String            @db.Uuid
   clientType       SessionClientType @default(WEB)
-  wordpressSiteId  String?   @db.Uuid
+  wordpressSiteId  String?           @db.Uuid
   refreshTokenHash String
-  userAgent        String?   @db.VarChar(512)
-  ipAddress        String?   @db.VarChar(64)
-  deviceName       String?   @db.VarChar(100)
+  userAgent        String?           @db.VarChar(512)
+  ipAddress        String?           @db.VarChar(64)
+  deviceName       String?           @db.VarChar(100)
   expiresAt        DateTime
-  lastUsedAt       DateTime  @default(now())
+  lastUsedAt       DateTime          @default(now())
   revokedAt        DateTime?
-  createdAt        DateTime  @default(now())
-  user             User      @relation(fields: [userId], references: [id], onDelete: Restrict)
-  wordpressSite    WordPressSite? @relation(fields: [wordpressSiteId], references: [id], onDelete: SetNull)
+  createdAt        DateTime          @default(now())
+  user             User              @relation(fields: [userId], references: [id], onDelete: Restrict)
+  wordpressSite    WordPressSite?    @relation(fields: [wordpressSiteId], references: [id], onDelete: SetNull)
 
   @@index([userId, revokedAt])
   @@index([expiresAt])
@@ -567,18 +567,18 @@ model Session {
 }
 
 model WordPressSite {
-  id              String    @id @default(uuid()) @db.Uuid
-  userId          String    @db.Uuid
-  name            String?   @db.VarChar(100)
-  domain          String    @db.VarChar(253)
-  installationKeyHash String @db.VarChar(64)
-  metadataJson    Json?
-  enabled         Boolean   @default(true)
-  lastConnectedAt DateTime?
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  sessions        Session[]
+  id                  String    @id @default(uuid()) @db.Uuid
+  userId              String    @db.Uuid
+  name                String?   @db.VarChar(100)
+  domain              String    @db.VarChar(253)
+  installationKeyHash String    @db.VarChar(64)
+  metadataJson        Json?
+  enabled             Boolean   @default(true)
+  lastConnectedAt     DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  user                User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sessions            Session[]
 
   @@unique([userId, domain])
   @@index([userId, enabled, createdAt])
@@ -607,5 +607,25 @@ model PasswordResetToken {
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, usedAt])
+  @@index([expiresAt])
+}
+
+model LoginProtection {
+  scopeHash    String   @id @db.VarChar(64)
+  failureCount Int      @default(0)
+  lastFailedAt DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model CaptchaChallenge {
+  id         String    @id @default(uuid()) @db.Uuid
+  scopeHash  String    @db.VarChar(64)
+  answerHash String    @db.VarChar(64)
+  attempts   Int       @default(0)
+  expiresAt  DateTime
+  usedAt     DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([scopeHash, expiresAt])
   @@index([expiresAt])
 }

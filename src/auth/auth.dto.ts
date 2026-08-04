@@ -49,7 +49,21 @@ export class LoginDto extends EmailDto {
   @IsString()
   @Length(1, 128)
   password!: string;
+
+  @ApiPropertyOptional({ format: 'uuid' })
+  @IsOptional()
+  @IsString()
+  @Length(36, 36)
+  captchaId?: string;
+
+  @ApiPropertyOptional({ example: '7K9P2' })
+  @IsOptional()
+  @IsString()
+  @Length(5, 5)
+  captchaCode?: string;
 }
+
+export class CaptchaRequestDto extends EmailDto {}
 export class TokenDto {
   @ApiProperty({
     example: 'eyJhbGciOiJIUzI1NiJ9.valid-verification-token',

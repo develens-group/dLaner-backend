@@ -9,6 +9,7 @@ import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { Prisma, SessionClientType, User, UserStatus } from '@prisma/client';
 import * as argon2 from 'argon2';
+import { randomInt } from 'node:crypto';
 import { durationMs } from '../common/duration';
 import { ClientContext } from '../common/request-context';
 import {
@@ -141,7 +142,7 @@ export class AuthService {
   }
 
   async login(dto: LoginDto, context: ClientContext) {
-    const user = await this.authenticateUser(dto);
+    const user = await this.authenticateUser(dto, context);
     return this.prisma.$transaction(async (tx) => {
       const session = await tx.session.create({
         data: {
@@ -165,7 +166,7 @@ export class AuthService {
   }
 
   async wordpressLogin(dto: WordPressLoginDto, context: ClientContext) {
-    const user = await this.authenticateUser(dto);
+    const user = await this.authenticateUser(dto, context);
     const domain = normalizeWordPressDomain(dto.siteUrl);
     const installationKey = createOpaqueToken();
     return this.prisma.$transaction(async (tx) => {
@@ -226,7 +227,50 @@ export class AuthService {
     });
   }
 
-  private async authenticateUser(dto: LoginDto) {
+  async createCaptcha(email: string, context: ClientContext) {
+    const scopeHash = this.loginScope(email, context.ipAddress);
+    const protection = await this.prisma.loginProtection.findUnique({
+      where: { scopeHash },
+    });
+    if (!protection || protection.failureCount < this.captchaThreshold())
+      throw new BadRequestException('Captcha is not required yet');
+    const alphabet = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
+    const code = Array.from(
+      { length: 5 },
+      () => alphabet[randomInt(0, alphabet.length)],
+    ).join('');
+    const challenge = await this.prisma.captchaChallenge.create({
+      data: {
+        scopeHash,
+        answerHash: hashOpaqueToken(code),
+        expiresAt: new Date(
+          Date.now() +
+            this.config.get<number>('CAPTCHA_TTL_SECONDS', 300) * 1000,
+        ),
+      },
+    });
+    const chars = [...code]
+      .map(
+        (char, index) =>
+          `<text x="${18 + index * 27}" y="43" transform="rotate(${randomInt(-12, 13)} ${18 + index * 27} 43)">${char}</text>`,
+      )
+      .join('');
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="160" height="60" viewBox="0 0 160 60"><rect width="160" height="60" fill="#f3f4f6"/><path d="M0 14L160 48M0 49L160 11M8 30L152 27" stroke="#94a3b8" stroke-width="1"/><g fill="#172554" font-family="monospace" font-size="28" font-weight="700">${chars}</g></svg>`;
+    return {
+      captchaId: challenge.id,
+      image: `data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`,
+      expiresAt: challenge.expiresAt,
+    };
+  }
+
+  private async authenticateUser(dto: LoginDto, context: ClientContext) {
+    const scopeHash = this.loginScope(dto.email, context.ipAddress);
+    const protection = await this.prisma.loginProtection.findUnique({
+      where: { scopeHash },
+    });
+    if ((protection?.failureCount ?? 0) >= this.captchaThreshold()) {
+      await this.validateCaptcha(scopeHash, dto);
+    }
     let user = await this.prisma.user.findUnique({
       where: { email: normalizeEmail(dto.email) },
     });
@@ -235,8 +279,21 @@ export class AuthService {
     const valid = await argon2
       .verify(user?.passwordHash ?? dummy, dto.password)
       .catch(() => false);
-    if (!user || !valid)
-      throw new UnauthorizedException('Invalid email or password');
+    if (!user || !valid) {
+      const failed = await this.prisma.loginProtection.upsert({
+        where: { scopeHash },
+        create: { scopeHash, failureCount: 1 },
+        update: { failureCount: { increment: 1 }, lastFailedAt: new Date() },
+      });
+      throw new UnauthorizedException({
+        message: 'Invalid email or password',
+        code:
+          failed.failureCount >= this.captchaThreshold()
+            ? 'CAPTCHA_REQUIRED'
+            : 'INVALID_LOGIN',
+        captchaRequired: failed.failureCount >= this.captchaThreshold(),
+      });
+    }
     if (user.status === UserStatus.PENDING_VERIFICATION) {
       if (this.verificationRequired())
         throw new ForbiddenException('Email verification is required');
@@ -247,7 +304,60 @@ export class AuthService {
     }
     if (user.status !== UserStatus.ACTIVE)
       throw new ForbiddenException('Account is unavailable');
+    await this.prisma.loginProtection.deleteMany({ where: { scopeHash } });
     return user;
+  }
+
+  private async validateCaptcha(scopeHash: string, dto: LoginDto) {
+    if (!dto.captchaId || !dto.captchaCode)
+      throw new UnauthorizedException({
+        message: 'Captcha is required',
+        code: 'CAPTCHA_REQUIRED',
+        captchaRequired: true,
+      });
+    const challenge = await this.prisma.captchaChallenge.findUnique({
+      where: { id: dto.captchaId },
+    });
+    const valid =
+      challenge &&
+      challenge.scopeHash === scopeHash &&
+      !challenge.usedAt &&
+      challenge.expiresAt > new Date() &&
+      challenge.attempts < this.config.get<number>('CAPTCHA_MAX_ATTEMPTS', 5) &&
+      challenge.answerHash ===
+        hashOpaqueToken(dto.captchaCode.trim().toUpperCase());
+    if (!valid) {
+      if (challenge && !challenge.usedAt)
+        await this.prisma.captchaChallenge.update({
+          where: { id: challenge.id },
+          data: { attempts: { increment: 1 } },
+        });
+      throw new UnauthorizedException({
+        message: 'Invalid or expired captcha',
+        code: 'INVALID_CAPTCHA',
+        captchaRequired: true,
+      });
+    }
+    const consumed = await this.prisma.captchaChallenge.updateMany({
+      where: { id: challenge.id, usedAt: null },
+      data: { usedAt: new Date() },
+    });
+    if (!consumed.count)
+      throw new UnauthorizedException({
+        message: 'Invalid or expired captcha',
+        code: 'INVALID_CAPTCHA',
+        captchaRequired: true,
+      });
+  }
+
+  private loginScope(email: string, ipAddress?: string) {
+    return hashOpaqueToken(
+      `${normalizeEmail(email)}|${ipAddress ?? 'unknown'}`,
+    );
+  }
+
+  private captchaThreshold() {
+    return this.config.get<number>('CAPTCHA_FAILURE_THRESHOLD', 2);
   }
 
   async refresh(rawToken: string, installationKey?: string, siteUrl?: string) {

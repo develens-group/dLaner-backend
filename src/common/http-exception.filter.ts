@@ -28,8 +28,16 @@ export class HttpExceptionFilter implements ExceptionFilter {
         ? exception.name.replace(/Exception$/, '').toUpperCase()
         : 'INTERNAL_SERVER_ERROR';
     res.locals.errorMessage = Array.isArray(message) ? message[0] : message;
+    const details =
+      payload && typeof payload === 'object'
+        ? Object.fromEntries(
+            Object.entries(payload).filter(
+              ([key]) => !['statusCode', 'message', 'error'].includes(key),
+            ),
+          )
+        : {};
     res
       .status(status)
-      .json({ error: { statusCode: status, message }, meta: null });
+      .json({ error: { statusCode: status, message, ...details }, meta: null });
   }
 }

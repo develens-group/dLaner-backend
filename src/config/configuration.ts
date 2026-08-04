@@ -20,6 +20,9 @@ class Environment {
   @IsIn(['true', 'false']) EMAIL_VERIFICATION_REQUIRED = 'false';
   @IsIn(['smtp', 'resend']) MAIL_TRANSPORT = 'smtp';
   @IsIn(['body', 'cookie']) AUTH_REFRESH_TOKEN_TRANSPORT = 'body';
+  @IsInt() @Min(1) CAPTCHA_FAILURE_THRESHOLD = 2;
+  @IsInt() @Min(60) CAPTCHA_TTL_SECONDS = 300;
+  @IsInt() @Min(1) CAPTCHA_MAX_ATTEMPTS = 5;
   @IsInt() @Min(1) PORT = 3000;
   @IsIn(['true', 'false']) API_REQUEST_STORAGE_ENABLED = 'true';
   @IsIn(['true', 'false']) API_REQUEST_BODY_CAPTURE_ENABLED = 'false';
@@ -68,6 +71,9 @@ export function validateEnvironment(values: Record<string, unknown>) {
     'API_REQUEST_MAX_QUERY_BYTES',
     'API_REQUEST_QUEUE_MAX_SIZE',
     'TRUST_PROXY',
+    'CAPTCHA_FAILURE_THRESHOLD',
+    'CAPTCHA_TTL_SECONDS',
+    'CAPTCHA_MAX_ATTEMPTS',
     'AI_HISTORY_MAX_INPUT_BYTES',
     'AI_HISTORY_MAX_OUTPUT_BYTES',
     'AI_HISTORY_RETENTION_DAYS',

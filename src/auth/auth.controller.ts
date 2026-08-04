@@ -19,6 +19,7 @@ import { getClientContext } from '../common/request-context';
 import type { AccessPrincipal } from '../common/auth.types';
 import {
   ChangePasswordDto,
+  CaptchaRequestDto,
   EmailDto,
   LoginDto,
   RefreshDto,
@@ -58,6 +59,16 @@ export class AuthController {
   @Throttle({ default: { limit: 3, ttl: 60_000 } })
   async resend(@Body() dto: EmailDto) {
     return response(await this.auth.resendVerification(dto.email));
+  }
+
+  @Public()
+  @Post('captcha')
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  async captcha(@Body() dto: CaptchaRequestDto, @Req() req: Request) {
+    return response(
+      await this.auth.createCaptcha(dto.email, getClientContext(req)),
+    );
   }
 
   @Public()
