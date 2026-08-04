@@ -1,5 +1,7 @@
 # Dlander Backend
 
+WordPress plugin authentication: [`docs/WORDPRESS_AUTH_FA.md`](docs/WORDPRESS_AUTH_FA.md)
+
 Production-oriented REST API built with NestJS, PostgreSQL, Prisma and Swagger. It provides authentication, request and AI history, and immutable-ledger credit accounting.
 
 ## Quick start

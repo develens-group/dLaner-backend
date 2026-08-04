@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
-import { Prisma, User, UserStatus } from '@prisma/client';
+import { Prisma, SessionClientType, User, UserStatus } from '@prisma/client';
 import * as argon2 from 'argon2';
 import { durationMs } from '../common/duration';
 import { ClientContext } from '../common/request-context';
@@ -25,6 +25,8 @@ import {
   ResetPasswordDto,
 } from './auth.dto';
 import { JwtClaims } from '../common/auth.types';
+import { WordPressLoginDto } from '../wordpress/wordpress.dto';
+import { normalizeWordPressDomain } from '../wordpress/wordpress-site';
 
 const publicUser = (user: User) => ({
   id: user.id,
@@ -139,26 +141,7 @@ export class AuthService {
   }
 
   async login(dto: LoginDto, context: ClientContext) {
-    let user = await this.prisma.user.findUnique({
-      where: { email: normalizeEmail(dto.email) },
-    });
-    const dummy =
-      '$argon2id$v=19$m=65536,t=3,p=4$MDAwMDAwMDAwMDAwMDAwMA$+WfJQw1uY6dYxe8GQ8jvbA';
-    const valid = await argon2
-      .verify(user?.passwordHash ?? dummy, dto.password)
-      .catch(() => false);
-    if (!user || !valid)
-      throw new UnauthorizedException('Invalid email or password');
-    if (user.status === UserStatus.PENDING_VERIFICATION) {
-      if (this.verificationRequired())
-        throw new ForbiddenException('Email verification is required');
-      user = await this.prisma.user.update({
-        where: { id: user.id },
-        data: { status: UserStatus.ACTIVE },
-      });
-    }
-    if (user.status !== UserStatus.ACTIVE)
-      throw new ForbiddenException('Account is unavailable');
+    const user = await this.authenticateUser(dto);
     return this.prisma.$transaction(async (tx) => {
       const session = await tx.session.create({
         data: {
@@ -181,7 +164,93 @@ export class AuthService {
     });
   }
 
-  async refresh(rawToken: string) {
+  async wordpressLogin(dto: WordPressLoginDto, context: ClientContext) {
+    const user = await this.authenticateUser(dto);
+    const domain = normalizeWordPressDomain(dto.siteUrl);
+    const installationKey = createOpaqueToken();
+    return this.prisma.$transaction(async (tx) => {
+      const existing = await tx.wordPressSite.findUnique({
+        where: { userId_domain: { userId: user.id, domain } },
+      });
+      if (existing && !existing.enabled)
+        throw new ForbiddenException('This WordPress site is disabled');
+      const site = existing
+        ? await tx.wordPressSite.update({
+            where: { id: existing.id },
+            data: {
+              name: dto.siteName?.trim() ?? existing.name,
+              metadataJson: dto.metadata as Prisma.InputJsonValue | undefined,
+              installationKeyHash: hashOpaqueToken(installationKey),
+              lastConnectedAt: new Date(),
+            },
+          })
+        : await tx.wordPressSite.create({
+            data: {
+              userId: user.id,
+              domain,
+              name: dto.siteName?.trim(),
+              metadataJson: dto.metadata as Prisma.InputJsonValue | undefined,
+              installationKeyHash: hashOpaqueToken(installationKey),
+              lastConnectedAt: new Date(),
+            },
+          });
+      await tx.session.updateMany({
+        where: { wordpressSiteId: site.id, revokedAt: null },
+        data: { revokedAt: new Date() },
+      });
+      const session = await tx.session.create({
+        data: {
+          userId: user.id,
+          clientType: SessionClientType.WORDPRESS,
+          wordpressSiteId: site.id,
+          refreshTokenHash: 'pending',
+          expiresAt: this.expiry('JWT_REFRESH_EXPIRES_IN'),
+          ...context,
+        },
+      });
+      const tokens = await this.issueTokens(user, session.id, 'wordpress');
+      await tx.session.update({
+        where: { id: session.id },
+        data: { refreshTokenHash: await argon2.hash(tokens.refreshToken) },
+      });
+      await tx.user.update({
+        where: { id: user.id },
+        data: { lastLoginAt: new Date() },
+      });
+      return {
+        ...tokens,
+        installationKey,
+        site: { id: site.id, domain: site.domain, enabled: site.enabled },
+        user: publicUser(user),
+      };
+    });
+  }
+
+  private async authenticateUser(dto: LoginDto) {
+    let user = await this.prisma.user.findUnique({
+      where: { email: normalizeEmail(dto.email) },
+    });
+    const dummy =
+      '$argon2id$v=19$m=65536,t=3,p=4$MDAwMDAwMDAwMDAwMDAwMA$+WfJQw1uY6dYxe8GQ8jvbA';
+    const valid = await argon2
+      .verify(user?.passwordHash ?? dummy, dto.password)
+      .catch(() => false);
+    if (!user || !valid)
+      throw new UnauthorizedException('Invalid email or password');
+    if (user.status === UserStatus.PENDING_VERIFICATION) {
+      if (this.verificationRequired())
+        throw new ForbiddenException('Email verification is required');
+      user = await this.prisma.user.update({
+        where: { id: user.id },
+        data: { status: UserStatus.ACTIVE },
+      });
+    }
+    if (user.status !== UserStatus.ACTIVE)
+      throw new ForbiddenException('Account is unavailable');
+    return user;
+  }
+
+  async refresh(rawToken: string, installationKey?: string, siteUrl?: string) {
     let claims: JwtClaims;
     try {
       claims = await this.jwt.verifyAsync(rawToken, {
@@ -196,7 +265,7 @@ export class AuthService {
       async (tx) => {
         const session = await tx.session.findUnique({
           where: { id: claims.sid },
-          include: { user: true },
+          include: { user: true, wordpressSite: true },
         });
         if (
           !session ||
@@ -206,6 +275,20 @@ export class AuthService {
           session.user.status !== UserStatus.ACTIVE
         )
           throw new UnauthorizedException('Invalid refresh token');
+        if (session.clientType === SessionClientType.WORDPRESS) {
+          if (
+            !session.wordpressSite ||
+            !session.wordpressSite.enabled ||
+            !installationKey ||
+            hashOpaqueToken(installationKey) !==
+              session.wordpressSite.installationKeyHash ||
+            !siteUrl ||
+            normalizeWordPressDomain(siteUrl) !== session.wordpressSite.domain
+          )
+            throw new UnauthorizedException(
+              'WordPress installation verification failed',
+            );
+        }
         const matches = await argon2
           .verify(session.refreshTokenHash, rawToken)
           .catch(() => false);
@@ -216,7 +299,13 @@ export class AuthService {
           });
           return null;
         }
-        const tokens = await this.issueTokens(session.user, session.id);
+        const tokens = await this.issueTokens(
+          session.user,
+          session.id,
+          session.clientType === SessionClientType.WORDPRESS
+            ? 'wordpress'
+            : 'web',
+        );
         const changed = await tx.session.updateMany({
           where: {
             id: session.id,
@@ -341,18 +430,22 @@ export class AuthService {
     if (!this.verificationRequired())
       throw new ForbiddenException('Email verification is currently disabled');
   }
-  private async issueTokens(user: User, sessionId: string) {
+  private async issueTokens(
+    user: User,
+    sessionId: string,
+    client: 'web' | 'wordpress' = 'web',
+  ) {
     const base = { sub: user.id, sid: sessionId };
     const [accessToken, refreshToken] = await Promise.all([
       this.jwt.signAsync(
-        { ...base, type: 'access', role: user.role, email: user.email },
+        { ...base, type: 'access', role: user.role, email: user.email, client },
         {
           secret: this.config.getOrThrow('JWT_ACCESS_SECRET'),
           expiresIn: this.config.getOrThrow('JWT_ACCESS_EXPIRES_IN'),
         },
       ),
       this.jwt.signAsync(
-        { ...base, type: 'refresh' },
+        { ...base, type: 'refresh', client },
         {
           secret: this.config.getOrThrow('JWT_REFRESH_SECRET'),
           expiresIn: this.config.getOrThrow('JWT_REFRESH_EXPIRES_IN'),

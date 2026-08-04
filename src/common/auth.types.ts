@@ -6,6 +6,8 @@ export interface AccessPrincipal {
   email: string;
   role: UserRole;
   status: UserStatus;
+  client: 'web' | 'wordpress';
+  wordpressSiteId?: string;
 }
 
 export interface JwtClaims {
@@ -14,6 +16,7 @@ export interface JwtClaims {
   type: 'access' | 'refresh';
   role?: UserRole;
   email?: string;
+  client?: 'web' | 'wordpress';
   iat?: number;
   exp?: number;
 }

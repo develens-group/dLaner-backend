@@ -27,6 +27,7 @@ import {
   TokenDto,
 } from './auth.dto';
 import { AuthService } from './auth.service';
+import { WordPressLoginDto } from '../wordpress/wordpress.dto';
 
 @ApiTags('auth')
 @Controller('api/v1/auth')
@@ -73,6 +74,19 @@ export class AuthController {
   }
 
   @Public()
+  @Post('wordpress/login')
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  async wordpressLogin(
+    @Body() dto: WordPressLoginDto,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const result = await this.auth.wordpressLogin(dto, getClientContext(req));
+    return response(this.transportTokens(result, res));
+  }
+
+  @Public()
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
   @Throttle({ default: { limit: 20, ttl: 60_000 } })
@@ -83,7 +97,16 @@ export class AuthController {
   ) {
     const raw = this.isCookie() ? this.readCookie(req) : dto.refreshToken;
     if (!raw) throw new UnauthorizedException('Refresh token is required');
-    return response(this.transportTokens(await this.auth.refresh(raw), res));
+    return response(
+      this.transportTokens(
+        await this.auth.refresh(
+          raw,
+          req.get('x-dlander-installation-key'),
+          req.get('x-dlander-site-url'),
+        ),
+        res,
+      ),
+    );
   }
 
   @ApiBearerAuth()
