@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <title>راهنمای احراز هویت فرانت React</title>
+  <style>
+    @page { size: A4; margin: 18mm 16mm 20mm; @bottom-center { content: "Dlander — React Authentication"; font: 9px Tahoma; color: #64748b; } }
+    * { box-sizing: border-box; }
+    body { margin: 0; color: #172033; font: 12px/2 Tahoma, Arial, sans-serif; background: white; }
+    h1,h2,h3 { color: #162b59; margin: 0 0 8px; page-break-after: avoid; }
+    h1 { font-size: 27px; } h2 { font-size: 19px; margin-top: 24px; border-bottom: 2px solid #dbeafe; padding-bottom: 5px; }
+    h3 { font-size: 14px; margin-top: 16px; }
+    p { margin: 5px 0 10px; } ul,ol { margin: 5px 0 12px; padding-right: 24px; }
+    li { margin: 3px 0; }
+    .cover { min-height: 245mm; display: flex; flex-direction: column; justify-content: center; padding: 25mm 12mm; background: linear-gradient(150deg,#eff6ff,#fff 52%,#eef2ff); }
+    .badge { display: inline-block; width: fit-content; background: #1d4ed8; color: #fff; border-radius: 99px; padding: 3px 12px; margin-bottom: 18px; }
+    .subtitle { font-size: 16px; color: #475569; max-width: 520px; }
+    .cover-grid { margin-top: 35px; display: grid; grid-template-columns: repeat(2,1fr); gap: 10px; }
+    .cover-card,.note,.security { border-radius: 10px; padding: 12px 15px; page-break-inside: avoid; }
+    .cover-card { background: rgba(255,255,255,.8); border: 1px solid #dbeafe; }
+    .note { background: #f8fafc; border-right: 4px solid #3b82f6; margin: 12px 0; }
+    .security { background: #ecfdf5; border: 1px solid #a7f3d0; }
+    pre { direction: ltr; text-align: left; unicode-bidi: embed; white-space: pre-wrap; word-break: break-word; background: #0f172a; color: #e2e8f0; border-radius: 9px; padding: 12px 14px; font: 10.5px/1.65 Consolas, monospace; page-break-inside: avoid; }
+    code { direction: ltr; unicode-bidi: embed; font-family: Consolas, monospace; background: #eef2ff; color: #3730a3; padding: 1px 4px; border-radius: 4px; }
+    pre code { background: none; color: inherit; padding: 0; }
+    table { width: 100%; border-collapse: collapse; margin: 10px 0 16px; page-break-inside: avoid; }
+    th,td { border: 1px solid #dbe3ef; padding: 7px 9px; text-align: right; }
+    th { background: #eff6ff; color: #1e3a8a; }
+    .page-break { page-break-before: always; }
+    .ltr { direction:ltr; text-align:left; }
+  </style>
+</head>
+<body>
+  <section class="cover">
+    <span class="badge">Dlander Backend</span>
+    <h1>راهنمای کامل احراز هویت فرانت React</h1>
+    <p class="subtitle">قرارداد API ورود، تمدید نشست، کپچای تطبیقی و کنترل‌های امنیتی مخصوص کلاینت وب</p>
+    <div class="cover-grid">
+      <div class="cover-card"><b>نوع نشست</b><br>WEB</div>
+      <div class="cover-card"><b>عامل احراز هویت</b><br>JWT و نشست سمت سرور</div>
+      <div class="cover-card"><b>محافظت ورود</b><br>Rate limit و CAPTCHA تطبیقی</div>
+      <div class="cover-card"><b>کلاینت‌ها</b><br>localhost و dlander.com</div>
+    </div>
+  </section>
+
+  <main>
+    <h2>۱. ورود معمولی</h2>
+    <p>فرانت React درخواست زیر را ارسال می‌کند:</p>
+    <pre>POST /api/v1/auth/login
+Content-Type: application/json
+
+{
+  "email": "user@example.com",
+  "password": "StrongPass123"
+}</pre>
+    <p>پاسخ موفق در قالب استاندارد API:</p>
+    <pre>{
+  "data": {
+    "accessToken": "ACCESS_TOKEN",
+    "refreshToken": "REFRESH_TOKEN",
+    "user": {
+      "id": "user-uuid",
+      "email": "user@example.com",
+      "displayName": "User",
+      "role": "USER",
+      "status": "ACTIVE"
+    }
+  },
+  "meta": null
+}</pre>
+    <div class="note">اگر <code>AUTH_REFRESH_TOKEN_TRANSPORT=cookie</code> باشد، refresh token داخل Cookie امن و HttpOnly قرار می‌گیرد و در JSON بازگردانده نمی‌شود.</div>
+
+    <h2>۲. استفاده از Access Token</h2>
+    <p>برای تمام endpointهای محافظت‌شده، access token در هدر ارسال می‌شود:</p>
+    <pre>GET /api/v1/users/me
+Authorization: Bearer ACCESS_TOKEN</pre>
+    <p>React به هدرهای <code>X-Dlander-Installation-Key</code> و <code>X-Dlander-Site-Url</code> نیاز ندارد؛ این هدرها مخصوص نشست WordPress هستند.</p>
+
+    <h2>۳. تمدید توکن</h2>
+    <h3>حالت انتقال در بدنه</h3>
+    <pre>POST /api/v1/auth/refresh
+Content-Type: application/json
+
+{ "refreshToken": "REFRESH_TOKEN" }</pre>
+    <h3>حالت Cookie</h3>
+    <pre>POST /api/v1/auth/refresh
+credentials: include</pre>
+    <p>پس از تمدید، access token و refresh token جدید صادر می‌شوند و refresh token قبلی دیگر معتبر نیست.</p>
+
+    <h2>۴. خروج</h2>
+    <pre>POST /api/v1/auth/logout
+Authorization: Bearer ACCESS_TOKEN</pre>
+    <p>برای خروج از تمام دستگاه‌ها:</p>
+    <pre>POST /api/v1/auth/logout-all
+Authorization: Bearer ACCESS_TOKEN</pre>
+
+    <h2 class="page-break">۵. کپچای تطبیقی در React</h2>
+    <p>در اولین ورود ناموفق:</p>
+    <pre>{
+  "error": {
+    "statusCode": 401,
+    "message": "Invalid email or password",
+    "code": "INVALID_LOGIN",
+    "captchaRequired": false
+  },
+  "meta": null
+}</pre>
+    <p>با تنظیم پیش‌فرض، بعد از دومین ورود ناموفق:</p>
+    <pre>{
+  "error": {
+    "statusCode": 401,
+    "message": "Invalid email or password",
+    "code": "CAPTCHA_REQUIRED",
+    "captchaRequired": true
+  },
+  "meta": null
+}</pre>
+    <p>فرانت باید با مشاهده <code>error.code === 'CAPTCHA_REQUIRED'</code> فرم کپچا را نمایش دهد.</p>
+
+    <h3>دریافت تصویر کپچا</h3>
+    <pre>POST /api/v1/auth/captcha
+Content-Type: application/json
+
+{ "email": "user@example.com" }</pre>
+    <pre>{
+  "data": {
+    "captchaId": "captcha-uuid",
+    "image": "data:image/svg+xml;base64,...",
+    "expiresAt": "2026-08-04T20:00:00.000Z"
+  },
+  "meta": null
+}</pre>
+    <p>تصویر با <code>&lt;img src={captcha.image} alt="Captcha" /&gt;</code> قابل نمایش است.</p>
+
+    <h3>ورود همراه کپچا</h3>
+    <pre>POST /api/v1/auth/login
+Content-Type: application/json
+
+{
+  "email": "user@example.com",
+  "password": "StrongPass123",
+  "captchaId": "captcha-uuid",
+  "captchaCode": "7K9P2"
+}</pre>
+    <p>اگر کپچا اشتباه، مصرف‌شده یا منقضی باشد، خطای <code>INVALID_CAPTCHA</code> برمی‌گردد و فرانت باید چالش جدیدی دریافت کند.</p>
+
+    <h3>الگوی پیاده‌سازی React</h3>
+    <pre>async function login(payload) {
+  const response = await fetch('/api/v1/auth/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify(payload),
+  });
+  const result = await response.json();
+
+  if (['CAPTCHA_REQUIRED', 'INVALID_CAPTCHA'].includes(result.error?.code)) {
+    const captchaResponse = await fetch('/api/v1/auth/captcha', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: payload.email }),
+    });
+    const captchaResult = await captchaResponse.json();
+    return { captchaRequired: true, captcha: captchaResult.data, error: result.error };
+  }
+  if (!response.ok) throw result.error;
+  return result.data;
+}</pre>
+
+    <h2 class="page-break">۶. امنیت اعمال‌شده برای React</h2>
+    <div class="security"><b>مدل امنیتی:</b> JWT کوتاه‌عمر + نشست قابل ابطال در دیتابیس + refresh rotation + کپچای تطبیقی + rate limiting.</div>
+    <h3>نشست سمت سرور</h3>
+    <p>JWT فقط از نظر امضا بررسی نمی‌شود. هر توکن دارای sessionId است و سرور نشست را در دیتابیس کنترل می‌کند. نشست در صورت ابطال، انقضا، مسدود یا حذف شدن کاربر، logout-all یا تغییر رمز قابل رد شدن است.</p>
+    <h3>Refresh Token Rotation</h3>
+    <ul>
+      <li>در هر refresh توکن جدید صادر و توکن قبلی نامعتبر می‌شود.</li>
+      <li>استفاده دوباره از توکن قبلی به‌عنوان reuse تشخیص داده می‌شود.</li>
+      <li>در صورت reuse، نشست باطل می‌شود.</li>
+      <li>هش refresh token با Argon2 در دیتابیس نگهداری می‌شود.</li>
+    </ul>
+    <h3>کپچای تطبیقی</h3>
+    <ul>
+      <li>محدودیت بر اساس ترکیب ایمیل normalizeشده و IP است.</li>
+      <li>پس از ۲ تلاش ناموفق فعال می‌شود، ۵ دقیقه اعتبار دارد و یک‌بارمصرف است.</li>
+      <li>پس از ۵ پاسخ اشتباه پذیرفته نمی‌شود.</li>
+      <li>کپچای صحیح پیش از بررسی نهایی رمز مصرف می‌شود تا نتوان با یک پاسخ چند رمز را امتحان کرد.</li>
+      <li>با ورود موفق شمارنده خطا پاک می‌شود.</li>
+    </ul>
+    <pre>CAPTCHA_FAILURE_THRESHOLD=2
+CAPTCHA_TTL_SECONDS=300
+CAPTCHA_MAX_ATTEMPTS=5</pre>
+    <h3>CORS و Rate Limit</h3>
+    <pre>FRONTEND_URL=https://dlander.com
+CORS_ORIGINS=http://localhost:5173,https://dlander.com</pre>
+    <p>CORS فقط دسترسی مرورگر را کنترل می‌کند و جایگزین authentication نیست. endpointهای ورود، کپچا، refresh و بازیابی رمز نیز rate limit دارند.</p>
+  </main>
+</body>
+</html>

@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <title>راهنمای احراز هویت افزونه WordPress</title>
+  <style>
+    @page { size: A4; margin: 18mm 16mm 20mm; @bottom-center { content: "Dlander — WordPress Plugin Authentication"; font: 9px Tahoma; color: #64748b; } }
+    * { box-sizing: border-box; }
+    body { margin: 0; color: #202433; font: 12px/2 Tahoma, Arial, sans-serif; background: white; }
+    h1,h2,h3 { color: #4c1d95; margin: 0 0 8px; page-break-after: avoid; }
+    h1 { font-size: 27px; } h2 { font-size: 19px; margin-top: 24px; border-bottom: 2px solid #ede9fe; padding-bottom: 5px; }
+    h3 { font-size: 14px; margin-top: 16px; } p { margin: 5px 0 10px; }
+    ul,ol { margin: 5px 0 12px; padding-right: 24px; } li { margin: 3px 0; }
+    .cover { min-height: 245mm; display: flex; flex-direction: column; justify-content: center; padding: 25mm 12mm; background: linear-gradient(150deg,#f5f3ff,#fff 52%,#faf5ff); }
+    .badge { display:inline-block; width:fit-content; background:#6d28d9; color:#fff; border-radius:99px; padding:3px 12px; margin-bottom:18px; }
+    .subtitle { font-size:16px; color:#57536a; max-width:540px; }
+    .cover-grid { margin-top:35px; display:grid; grid-template-columns:repeat(2,1fr); gap:10px; }
+    .cover-card,.note,.security,.warning { border-radius:10px; padding:12px 15px; page-break-inside:avoid; }
+    .cover-card { background:rgba(255,255,255,.82); border:1px solid #ddd6fe; }
+    .note { background:#fafafa; border-right:4px solid #8b5cf6; margin:12px 0; }
+    .security { background:#ecfdf5; border:1px solid #a7f3d0; }
+    .warning { background:#fff7ed; border:1px solid #fed7aa; }
+    pre { direction:ltr; text-align:left; unicode-bidi:embed; white-space:pre-wrap; word-break:break-word; background:#18132b; color:#ede9fe; border-radius:9px; padding:12px 14px; font:10.5px/1.65 Consolas,monospace; page-break-inside:avoid; }
+    code { direction:ltr; unicode-bidi:embed; font-family:Consolas,monospace; background:#f3e8ff; color:#6b21a8; padding:1px 4px; border-radius:4px; }
+    pre code { background:none; color:inherit; padding:0; }
+    table { width:100%; border-collapse:collapse; margin:10px 0 16px; page-break-inside:avoid; }
+    th,td { border:1px solid #e4def0; padding:7px 9px; text-align:right; }
+    th { background:#f5f3ff; color:#5b21b6; }
+    .page-break { page-break-before:always; }
+  </style>
+</head>
+<body>
+  <section class="cover">
+    <span class="badge">Dlander Backend</span>
+    <h1>راهنمای کامل احراز هویت افزونه WordPress</h1>
+    <p class="subtitle">قرارداد اتصال افزونه، مدیریت نصب‌ها از React، کپچای ورود و کنترل دسترسی چندعاملی نصب</p>
+    <div class="cover-grid">
+      <div class="cover-card"><b>نوع نشست</b><br>WORDPRESS</div>
+      <div class="cover-card"><b>عوامل درخواست</b><br>JWT + Installation Key + Domain</div>
+      <div class="cover-card"><b>مدیریت نصب</b><br>فقط از نشست WEB</div>
+      <div class="cover-card"><b>محافظت ورود</b><br>CAPTCHA تطبیقی و Rate Limit</div>
+    </div>
+  </section>
+
+  <main>
+    <h2>۱. جمع‌آوری اطلاعات سایت</h2>
+    <pre>$site_url = home_url();
+$site_name = get_bloginfo('name');
+$metadata = [
+    'wpVersion' =&gt; get_bloginfo('version'),
+    'phpVersion' =&gt; PHP_VERSION,
+    'pluginVersion' =&gt; DLANDER_PLUGIN_VERSION,
+    'multisite' =&gt; is_multisite(),
+];</pre>
+    <div class="warning">فقط metadata غیرحساس ارسال شود. رمز دیتابیس، کلیدهای wp-config.php، secretها و مسیرهای خصوصی سرور نباید ارسال شوند.</div>
+
+    <h2>۲. ورود افزونه</h2>
+    <pre>POST /api/v1/auth/wordpress/login
+Content-Type: application/json
+
+{
+  "email": "user@example.com",
+  "password": "StrongPass123",
+  "siteUrl": "https://shop.example.com",
+  "siteName": "فروشگاه من",
+  "metadata": {
+    "wpVersion": "6.8",
+    "phpVersion": "8.3",
+    "pluginVersion": "1.0.0",
+    "multisite": false
+  }
+}</pre>
+    <p>پاسخ موفق:</p>
+    <pre>{
+  "data": {
+    "accessToken": "WORDPRESS_ACCESS_TOKEN",
+    "refreshToken": "WORDPRESS_REFRESH_TOKEN",
+    "installationKey": "RANDOM_INSTALLATION_KEY",
+    "site": {
+      "id": "site-uuid",
+      "domain": "shop.example.com",
+      "enabled": true
+    },
+    "user": {
+      "id": "user-uuid",
+      "email": "user@example.com",
+      "role": "USER",
+      "status": "ACTIVE"
+    }
+  },
+  "meta": null
+}</pre>
+    <p>دامنه normalize می‌شود؛ URLهای دارای مسیر، حروف بزرگ و پروتکل متفاوت همگی به hostname پایدار مانند <code>shop.example.com</code> تبدیل می‌شوند.</p>
+
+    <h2>۳. ذخیره امن اطلاعات در افزونه</h2>
+    <pre>update_option('dlander_access_token', $access_token, false);
+update_option('dlander_refresh_token', $refresh_token, false);
+update_option('dlander_installation_key', $installation_key, false);
+update_option('dlander_site_id', $site_id, false);</pre>
+    <div class="note">WordPress Options معمولاً رمزنگاری‌شده نیست. در صورت امکان installation key و refresh token در wp-config.php یا secret storage هاست نگهداری شوند.</div>
+
+    <h2 class="page-break">۴. درخواست‌های محافظت‌شده افزونه</h2>
+    <p>تمام درخواست‌ها باید هر سه هدر زیر را داشته باشند:</p>
+    <pre>Authorization: Bearer WORDPRESS_ACCESS_TOKEN
+X-Dlander-Installation-Key: RANDOM_INSTALLATION_KEY
+X-Dlander-Site-Url: https://shop.example.com</pre>
+    <pre>$response = wp_remote_get(
+    DLANDER_API_URL . '/api/v1/users/me',
+    [
+        'timeout' =&gt; 20,
+        'headers' =&gt; [
+            'Authorization' =&gt; 'Bearer ' . $access_token,
+            'X-Dlander-Installation-Key' =&gt; $installation_key,
+            'X-Dlander-Site-Url' =&gt; home_url(),
+            'Accept' =&gt; 'application/json',
+        ],
+    ]
+);</pre>
+    <p>اشتباه بودن توکن، کلید نصب، دامنه، وضعیت سایت، نشست یا حساب کاربری باعث پاسخ 401 می‌شود.</p>
+
+    <h2>۵. تمدید توکن افزونه</h2>
+    <pre>POST /api/v1/auth/refresh
+X-Dlander-Installation-Key: RANDOM_INSTALLATION_KEY
+X-Dlander-Site-Url: https://shop.example.com
+Content-Type: application/json
+
+{ "refreshToken": "WORDPRESS_REFRESH_TOKEN" }</pre>
+    <pre>$response = wp_remote_post(
+    DLANDER_API_URL . '/api/v1/auth/refresh',
+    [
+        'timeout' =&gt; 20,
+        'headers' =&gt; [
+            'Content-Type' =&gt; 'application/json',
+            'X-Dlander-Installation-Key' =&gt; $installation_key,
+            'X-Dlander-Site-Url' =&gt; home_url(),
+        ],
+        'body' =&gt; wp_json_encode([
+            'refreshToken' =&gt; $refresh_token,
+        ]),
+    ]
+);</pre>
+    <p>افزونه باید access token و refresh token جدید را بلافاصله جایگزین مقادیر قبلی کند.</p>
+
+    <h2>۶. کپچا در ورود WordPress</h2>
+    <p>بعد از دومین رمز اشتباه، پاسخ دارای <code>CAPTCHA_REQUIRED</code> و <code>captchaRequired: true</code> است. افزونه باید با ایمیل کاربر از endpoint زیر تصویر بگیرد:</p>
+    <pre>POST /api/v1/auth/captcha
+Content-Type: application/json
+
+{ "email": "user@example.com" }</pre>
+    <p>سپس تصویر را در صفحه تنظیمات نمایش دهد و ورود را تکرار کند:</p>
+    <pre>{
+  "email": "user@example.com",
+  "password": "StrongPass123",
+  "siteUrl": "https://shop.example.com",
+  "siteName": "فروشگاه من",
+  "captchaId": "captcha-uuid",
+  "captchaCode": "7K9P2",
+  "metadata": {
+    "wpVersion": "6.8",
+    "phpVersion": "8.3",
+    "pluginVersion": "1.0.0"
+  }
+}</pre>
+
+    <h2 class="page-break">۷. مدیریت سایت‌های WordPress از React</h2>
+    <p>این endpointها فقط با access token نشست WEB قابل استفاده‌اند و نشست WordPress اجازه تغییر آن‌ها را ندارد.</p>
+    <table><thead><tr><th>عملیات</th><th>Endpoint</th></tr></thead><tbody>
+      <tr><td>فهرست نصب‌ها</td><td><code>GET /api/v1/users/me/wordpress-sites</code></td></tr>
+      <tr><td>ایجاد نصب</td><td><code>POST /api/v1/users/me/wordpress-sites</code></td></tr>
+      <tr><td>ویرایش دامنه/نام/وضعیت</td><td><code>PATCH /api/v1/users/me/wordpress-sites/:id</code></td></tr>
+      <tr><td>حذف نصب</td><td><code>DELETE /api/v1/users/me/wordpress-sites/:id</code></td></tr>
+      <tr><td>تعویض کلید</td><td><code>POST /api/v1/users/me/wordpress-sites/:id/rotate-key</code></td></tr>
+    </tbody></table>
+    <h3>ایجاد</h3>
+    <pre>{ "domain": "shop.example.com", "name": "فروشگاه اصلی" }</pre>
+    <h3>ویرایش یا غیرفعال‌سازی</h3>
+    <pre>{
+  "domain": "new-shop.example.com",
+  "name": "فروشگاه جدید",
+  "enabled": true
+}</pre>
+    <pre>{ "enabled": false }</pre>
+    <h3>تعویض کلید</h3>
+    <pre>POST /api/v1/users/me/wordpress-sites/SITE_UUID/rotate-key
+Authorization: Bearer WEB_ACCESS_TOKEN</pre>
+    <p>کلید جدید فقط در همین پاسخ نشان داده می‌شود. پس از تعویض، افزونه باید با کلید جدید تنظیم یا دوباره login شود.</p>
+
+    <h2 class="page-break">۸. امنیت اعمال‌شده برای WordPress</h2>
+    <div class="security"><b>مدل امنیتی:</b> نشست WORDPRESS + JWT + کلید تصادفی نصب + تطبیق دامنه + کنترل فعال‌بودن نصب + refresh rotation + CAPTCHA.</div>
+    <h3>نشست مستقل و اتصال به نصب</h3>
+    <p>نشست افزونه با نوع WORDPRESS ثبت و به رکورد مشخص WordPressSite متصل می‌شود. این رکورد مالک، دامنه، هش کلید نصب، metadata، وضعیت و آخرین اتصال را نگهداری می‌کند.</p>
+    <h3>محافظت در صورت افشای JWT</h3>
+    <pre>JWT + Installation Key + Matching Domain</pre>
+    <p>داشتن access token یا refresh token به‌تنهایی کافی نیست. کلید نصب عامل دوم است. دامنه secret نیست و هدر آن قابل جعل است؛ بنابراین دامنه به‌تنهایی عامل امنیتی محسوب نمی‌شود.</p>
+    <h3>ذخیره و چرخش کلید</h3>
+    <p>در بک‌اند فقط هش SHA-256 کلید نصب ذخیره می‌شود. مقدار خام فقط هنگام ایجاد سایت، ورود افزونه یا rotate-key بازگردانده می‌شود.</p>
+    <h3>ابطال فوری نشست‌ها</h3>
+    <ul>
+      <li>تغییر دامنه، غیرفعال‌کردن یا حذف سایت از React</li>
+      <li>تعویض installation key یا ورود مجدد افزونه</li>
+      <li>logout، logout-all، مسدود یا حذف شدن حساب</li>
+    </ul>
+    <h3>جداسازی Control Plane</h3>
+    <p>توکن WordPress نمی‌تواند تنظیمات WordPressSite را تغییر دهد. مدیریت نصب‌ها فقط از نشست WEB انجام می‌شود؛ بنابراین افزونه قادر نیست محدودیت دامنه یا وضعیت خودش را دور بزند.</p>
+    <h3>محدودیت امنیتی</h3>
+    <div class="warning">اگر مهاجم هم‌زمان access token، refresh token، installation key و site URL را به دست آورد، تا زمان ابطال نشست می‌تواند خود را افزونه معرفی کند. کاربر باید سایت را غیرفعال یا حذف کند، کلید را بچرخاند یا logout-all انجام دهد. لایه پیشرفته‌تر آینده می‌تواند HMAC، nonce و محافظت replay برای هر درخواست باشد.</div>
+  </main>
+</body>
+</html>
