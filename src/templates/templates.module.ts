@@ -34,6 +34,6 @@ import { TemplatesService } from './templates.service';
     },
     TemplatesService,
   ],
-  exports: [TemplatesService],
+  exports: [TemplatesService, OBJECT_STORAGE],
 })
 export class TemplatesModule {}

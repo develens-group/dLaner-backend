@@ -61,6 +61,8 @@ class Environment {
   @IsInt() @Min(1) TEMPLATE_MAX_ELEMENTS_PER_ITEM = 2000;
   @IsUrl({ require_tld: false }) TEMPLATE_SHARE_BASE_URL =
     'http://localhost:3000';
+  @IsInt() @Min(2) LAND_REVISION_RETENTION = 3;
+  @IsInt() @Min(1024) LAND_MAX_JSON_BYTES = 10000000;
 }
 
 export function validateEnvironment(values: Record<string, unknown>) {
@@ -88,6 +90,8 @@ export function validateEnvironment(values: Record<string, unknown>) {
     'TEMPLATE_MAX_BUNDLE_BYTES',
     'TEMPLATE_MAX_ITEMS',
     'TEMPLATE_MAX_ELEMENTS_PER_ITEM',
+    'LAND_REVISION_RETENTION',
+    'LAND_MAX_JSON_BYTES',
   ] as const;
   const normalized: Record<string, unknown> = { ...values };
   for (const key of numericKeys) {

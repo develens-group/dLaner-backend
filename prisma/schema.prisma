@@ -152,9 +152,43 @@ model User {
   templateVersions    TemplateVersion[]        @relation("TemplateVersionCreator")
   templateReviews     TemplateReview[]         @relation("TemplateReviewer")
   templateMetrics     TemplateMetric[]
+  lands               Land[]                    @relation("LandOwner")
+  landRevisions       LandRevision[]            @relation("LandRevisionCreator")
 
   @@index([status])
   @@index([createdAt])
+}
+
+model Land {
+  id                String         @id @default(uuid()) @db.Uuid
+  ownerId           String         @db.Uuid
+  title             String         @db.VarChar(150)
+  currentRevisionId String?        @unique @db.Uuid
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+  deletedAt         DateTime?
+  owner             User           @relation("LandOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+  currentRevision   LandRevision?  @relation("CurrentLandRevision", fields: [currentRevisionId], references: [id], onDelete: SetNull)
+  revisions         LandRevision[] @relation("LandRevisions")
+
+  @@index([ownerId, deletedAt, updatedAt])
+}
+
+model LandRevision {
+  id            String   @id @default(uuid()) @db.Uuid
+  landId        String   @db.Uuid
+  revision      Int
+  storageKey    String   @unique @db.VarChar(500)
+  contentHash   String   @db.VarChar(64)
+  sizeBytes     Int
+  createdById   String   @db.Uuid
+  createdAt     DateTime @default(now())
+  land          Land     @relation("LandRevisions", fields: [landId], references: [id], onDelete: Cascade)
+  currentFor    Land?    @relation("CurrentLandRevision")
+  createdBy     User     @relation("LandRevisionCreator", fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@unique([landId, revision])
+  @@index([landId, createdAt])
 }
 
 model Template {

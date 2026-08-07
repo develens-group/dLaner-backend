@@ -20,6 +20,7 @@ import { CreditsModule } from './credits/credits.module';
 import { HealthController } from './health.controller';
 import { TemplatesModule } from './templates/templates.module';
 import { WordPressModule } from './wordpress/wordpress.module';
+import { LandsModule } from './lands/lands.module';
 
 @Module({
   imports: [
@@ -36,6 +37,7 @@ import { WordPressModule } from './wordpress/wordpress.module';
     AiModule,
     TemplatesModule,
     WordPressModule,
+    LandsModule,
   ],
   controllers: [AppController, HealthController],
   providers: [

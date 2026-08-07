@@ -1,0 +1,30 @@
+### Create a land
+POST {{baseUrl}}/api/v1/lands
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "title": "Landing page A",
+  "canvas": { "elements": [] }
+}
+
+### List my lands
+GET {{baseUrl}}/api/v1/lands?page=1&limit=20
+Authorization: Bearer {{accessToken}}
+
+### Save a new immutable revision
+POST {{baseUrl}}/api/v1/lands/{{landId}}/revisions
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "canvas": { "elements": [{ "id": "hero" }] }
+}
+
+### Download the current canvas
+GET {{baseUrl}}/api/v1/lands/{{landId}}/canvas
+Authorization: Bearer {{accessToken}}
+
+### Restore a retained revision (creates a new revision)
+POST {{baseUrl}}/api/v1/lands/{{landId}}/revisions/1/restore
+Authorization: Bearer {{accessToken}}
