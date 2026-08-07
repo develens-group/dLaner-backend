@@ -24,8 +24,8 @@
     "test:e2e:watch": "jest --config ./test/jest-e2e.json --watch --runInBand",
     "test:e2e:cov": "npm run test:db:reset && jest --config ./test/jest-e2e.json --coverage --runInBand",
     "test:db:reset": "node scripts/test-db-reset.cjs",
-    "retention:cleanup": "ts-node src/maintenance/retention.ts"
-    ,"templates:import": "ts-node scripts/import-templates.ts"
+    "retention:cleanup": "ts-node src/maintenance/retention.ts",
+    "templates:import": "ts-node scripts/import-templates.ts"
   },
   "engines": {
     "node": "22.x"

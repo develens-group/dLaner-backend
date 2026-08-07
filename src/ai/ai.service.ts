@@ -1,7 +1,9 @@
 import {
   BadRequestException,
   ConflictException,
+  Inject,
   Injectable,
+  Logger,
   NotFoundException,
   RequestTimeoutException,
 } from '@nestjs/common';
@@ -17,15 +19,18 @@ import { AiProviderRegistry } from './ai-provider.registry';
 import { AiRequestQueryDto, CreateAiRequestDto } from './ai.dto';
 import { CreditService } from '../credits/credit.service';
 import { CreditCostCalculator } from '../credits/credit-cost-calculator';
+import { AI_HISTORY_STORE, type AiHistoryStore } from './ai-history.store';
 
 @Injectable()
 export class AiService {
+  private readonly logger = new Logger(AiService.name);
   constructor(
     private readonly prisma: PrismaService,
     private readonly providers: AiProviderRegistry,
     private readonly config: ConfigService,
     private readonly credits: CreditService,
     private readonly costs: CreditCostCalculator,
+    @Inject(AI_HISTORY_STORE) private readonly history: AiHistoryStore,
   ) {}
   async createAndExecute(
     userId: string,
@@ -45,7 +50,7 @@ export class AiService {
           throw new ConflictException(
             'Idempotency key was used with different input',
           );
-        return existing;
+        return (await this.hydrate([existing]))[0];
       }
     }
     const chargingEnabled =
@@ -71,7 +76,9 @@ export class AiService {
         model: dto.model,
         operation: dto.operation,
         inputHash,
-        inputJson: input.value as Prisma.InputJsonValue,
+        inputJson: this.usesExternalHistory()
+          ? Prisma.JsonNull
+          : (input.value as Prisma.InputJsonValue),
         inputOmitted: !input.captured,
         inputTruncated: input.truncated,
         inputRedacted: input.redacted,
@@ -81,6 +88,20 @@ export class AiService {
         creditReservationId: reservation?.id,
       },
     });
+    if (this.usesExternalHistory()) {
+      try {
+        await this.history.create(record.id, userId, input.value);
+      } catch (error) {
+        this.logger.error(
+          `DynamoDB input write failed for AI request ${record.id}; using PostgreSQL fallback`,
+          error instanceof Error ? error.stack : undefined,
+        );
+        await this.prisma.aiRequest.update({
+          where: { id: record.id },
+          data: { inputJson: input.value as Prisma.InputJsonValue },
+        });
+      }
+    }
     await this.prisma.aiRequest.update({
       where: { id: record.id },
       data: { status: AiRequestStatus.PROCESSING },
@@ -177,7 +198,11 @@ export class AiService {
     });
     const hasMore = items.length > query.limit;
     if (hasMore) items.pop();
-    return { items, nextCursor: hasMore ? (items.at(-1)?.id ?? null) : null };
+    const hydrated = await this.hydrate(items);
+    return {
+      items: hydrated,
+      nextCursor: hasMore ? (items.at(-1)?.id ?? null) : null,
+    };
   }
   async get(id: string, userId?: string) {
     const record = await this.prisma.aiRequest.findFirst({
@@ -185,7 +210,7 @@ export class AiService {
       select: safeAiSelect,
     });
     if (!record) throw new NotFoundException('AI request not found');
-    return record;
+    return (await this.hydrate([record]))[0];
   }
   async cancel(id: string, userId?: string) {
     const record = await this.prisma.aiRequest.findFirst({
@@ -231,11 +256,19 @@ export class AiService {
   async cleanup(
     retentionDays = this.config.get<number>('AI_HISTORY_RETENTION_DAYS', 90),
   ) {
-    return this.prisma.aiRequest.deleteMany({
+    const externalCount = await this.history.cleanup?.().catch((error) => {
+      this.logger.error(
+        'Cloudflare D1 history cleanup failed',
+        error instanceof Error ? error.stack : undefined,
+      );
+      return 0;
+    });
+    const result = await this.prisma.aiRequest.deleteMany({
       where: {
         createdAt: { lt: new Date(Date.now() - retentionDays * 86_400_000) },
       },
     });
+    return { ...result, externalCount: externalCount ?? 0 };
   }
   private capture(value: unknown, kind: 'INPUT' | 'OUTPUT') {
     if (this.config.get(`AI_HISTORY_STORE_${kind}`, 'true') !== 'true')
@@ -257,13 +290,28 @@ export class AiService {
     actualCreditCost: number,
   ) {
     const output = this.capture(result.output, 'OUTPUT');
-    return this.prisma.aiRequest.update({
+    let externalStored = false;
+    if (this.usesExternalHistory()) {
+      try {
+        await this.history.complete(id, output.value);
+        externalStored = true;
+      } catch (error) {
+        this.logger.error(
+          `DynamoDB output write failed for AI request ${id}; using PostgreSQL fallback`,
+          error instanceof Error ? error.stack : undefined,
+        );
+      }
+    }
+    const updated = await this.prisma.aiRequest.update({
       where: { id },
       data: {
         status: AiRequestStatus.COMPLETED,
         completedAt: new Date(),
         latencyMs,
-        outputJson: output.value as Prisma.InputJsonValue,
+        outputJson:
+          this.usesExternalHistory() && externalStored
+            ? Prisma.JsonNull
+            : (output.value as Prisma.InputJsonValue),
         outputOmitted: !output.captured,
         outputTruncated: output.truncated,
         outputRedacted: output.redacted,
@@ -277,6 +325,38 @@ export class AiService {
       },
       select: safeAiSelect,
     });
+    return (await this.hydrate([updated]))[0];
+  }
+  private usesExternalHistory() {
+    return (
+      this.config.get('AI_HISTORY_STORAGE_DRIVER', 'postgres') ===
+      'cloudflare-d1'
+    );
+  }
+  private async hydrate<
+    T extends { id: string; inputJson: unknown; outputJson: unknown },
+  >(records: T[]): Promise<T[]> {
+    if (!this.usesExternalHistory() || !records.length) return records;
+    try {
+      const payloads = await this.history.getMany(
+        records.map((item) => item.id),
+      );
+      return records.map((record) => {
+        const payload = payloads.get(record.id);
+        if (!payload) return record;
+        return {
+          ...record,
+          inputJson: payload.inputJson ?? record.inputJson,
+          outputJson: payload.outputJson ?? record.outputJson,
+        };
+      });
+    } catch (error) {
+      this.logger.error(
+        'DynamoDB history read failed; returning PostgreSQL fallback fields',
+        error instanceof Error ? error.stack : undefined,
+      );
+      return records;
+    }
   }
   private async withTimeout<T>(promise: Promise<T>): Promise<T> {
     const timeoutMs = this.config.get<number>('AI_PROVIDER_TIMEOUT_MS', 30_000);

@@ -37,6 +37,7 @@ class Environment {
   @IsInt() @Min(256) AI_HISTORY_MAX_INPUT_BYTES = 32768;
   @IsInt() @Min(256) AI_HISTORY_MAX_OUTPUT_BYTES = 32768;
   @IsInt() @Min(1) AI_HISTORY_RETENTION_DAYS = 90;
+  @IsIn(['postgres', 'cloudflare-d1']) AI_HISTORY_STORAGE_DRIVER = 'postgres';
   @IsInt() @Min(100) AI_PROVIDER_TIMEOUT_MS = 30000;
   @IsString() DEFAULT_CURRENCY = 'USD';
   @IsInt() @Min(1) CREDIT_MAX_TRANSACTION_AMOUNT = 1000000000;
