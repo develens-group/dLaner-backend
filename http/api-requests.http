@@ -13,4 +13,11 @@ Authorization: Bearer {{accessToken}}
 ### Common error: ordinary users receive 403
 GET {{baseUrl}}/api/v1/admin/api-requests
 Authorization: Bearer {{accessToken}}
+### Admin API usage (latest 30 days)
+GET {{baseUrl}}/api/v1/admin/api-requests/usage
+Authorization: Bearer {{accessToken}}
+
+### Admin API usage with dashboard filters
+GET {{baseUrl}}/api/v1/admin/api-requests/usage?from=2026-08-01T00:00:00.000Z&to=2026-08-31T23:59:59.999Z&routeContains=/api/v1/ai&outcome=success&authenticated=true
+Authorization: Bearer {{accessToken}}
 

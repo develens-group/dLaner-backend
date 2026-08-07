@@ -20,6 +20,12 @@ export class ApiRequestsController {
   @Get('stats') async stats(@Query() query: ApiRequestQueryDto) {
     return response(await this.service.stats(query));
   }
+  @Get('usage') async usage(
+    @Query() query: ApiRequestQueryDto,
+    @CurrentUser() actor: AccessPrincipal,
+  ) {
+    return response(await this.service.usage(query, actor.userId));
+  }
   @Get(':requestId') async get(
     @Param('requestId') id: string,
     @CurrentUser() actor: AccessPrincipal,

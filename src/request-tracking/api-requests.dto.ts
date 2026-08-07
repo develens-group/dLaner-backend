@@ -3,6 +3,7 @@ import { ApiRequestSource } from '@prisma/client';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import {
   IsDateString,
+  IsBoolean,
   IsEnum,
   IsIn,
   IsInt,
@@ -119,4 +120,38 @@ export class ApiRequestQueryDto {
   @IsOptional()
   @IsIn(['asc', 'desc'])
   order: 'asc' | 'desc' = 'desc';
+
+  @ApiPropertyOptional({
+    enum: ['success', 'redirect', 'client-error', 'server-error'],
+    example: 'success',
+  })
+  @IsOptional()
+  @IsIn(['success', 'redirect', 'client-error', 'server-error'])
+  outcome?: 'success' | 'redirect' | 'client-error' | 'server-error';
+
+  @ApiPropertyOptional({ example: '/api/v1/ai', maxLength: 512 })
+  @IsOptional()
+  @IsString()
+  @Length(1, 512)
+  routeContains?: string;
+
+  @ApiPropertyOptional({ example: 100, minimum: 0, type: Number })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  minDurationMs?: number;
+
+  @ApiPropertyOptional({ example: 5000, minimum: 0, type: Number })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  maxDurationMs?: number;
+
+  @ApiPropertyOptional({ example: true, type: Boolean })
+  @IsOptional()
+  @Type(() => Boolean)
+  @IsBoolean()
+  authenticated?: boolean;
 }
