@@ -23,6 +23,32 @@ only after the new revision is committed.
 - `GET /api/v1/lands/:id/revisions/:revision/canvas` — stream an older JSON
 - `POST /api/v1/lands/:id/revisions/:revision/restore` — restore by creating a new revision
 
+## Create example
+
+```json
+{
+  "title": "Landing page campaign",
+  "canvas": {
+    "version": 1,
+    "elements": [
+      {
+        "id": "hero-title",
+        "type": "text",
+        "x": 120,
+        "y": 96,
+        "width": 640,
+        "height": 80,
+      }
+    ],
+    "appstate": { "backgroundColor": "#ffffff" }
+  }
+}
+```
+
+The response follows the standard API envelope. `currentRevision.storageKey`
+identifies the JSON file, while the frontend should load its content through
+`GET /api/v1/lands/:id/canvas` instead of accessing storage directly.
+
 Configure `LAND_REVISION_RETENTION` (default `3`) and `LAND_MAX_JSON_BYTES`
 (default `10000000`). Files use the existing template object-storage driver, so
 production should set `TEMPLATE_STORAGE_DRIVER=s3`; local disk is suitable for a

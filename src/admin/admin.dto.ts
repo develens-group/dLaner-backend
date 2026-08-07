@@ -1,6 +1,21 @@
-import { ApiPropertyOptional } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { UserPlan } from '@prisma/client';
 import { Transform, Type } from 'class-transformer';
-import { IsIn, IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
+import {
+  IsEnum,
+  IsIn,
+  IsInt,
+  IsOptional,
+  IsString,
+  Max,
+  Min,
+} from 'class-validator';
+
+export class ChangeUserPlanDto {
+  @ApiProperty({ enum: UserPlan, example: UserPlan.PRO })
+  @IsEnum(UserPlan)
+  plan!: UserPlan;
+}
 
 export class UserQueryDto {
   @ApiPropertyOptional({ example: 1, default: 1, minimum: 1, type: Number })

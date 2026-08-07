@@ -1,9 +1,11 @@
 import {
+  Body,
   Controller,
   Get,
   HttpCode,
   HttpStatus,
   Param,
+  Patch,
   ParseUUIDPipe,
   Post,
   Query,
@@ -13,7 +15,7 @@ import { UserRole } from '@prisma/client';
 import { response } from '../common/api-response';
 import type { AccessPrincipal } from '../common/auth.types';
 import { CurrentUser, Roles } from '../common/decorators';
-import { UserQueryDto } from './admin.dto';
+import { ChangeUserPlanDto, UserQueryDto } from './admin.dto';
 import { AdminService } from './admin.service';
 
 @ApiTags('admin')
@@ -44,5 +46,13 @@ export class AdminController {
     @Param('userId', ParseUUIDPipe) id: string,
   ) {
     return response(await this.admin.unblock(actor, id));
+  }
+  @Patch(':userId/plan')
+  async changePlan(
+    @CurrentUser() actor: AccessPrincipal,
+    @Param('userId', ParseUUIDPipe) id: string,
+    @Body() dto: ChangeUserPlanDto,
+  ) {
+    return response(await this.admin.changePlan(actor, id, dto.plan));
   }
 }

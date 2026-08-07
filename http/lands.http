@@ -4,8 +4,21 @@ Authorization: Bearer {{accessToken}}
 Content-Type: application/json
 
 {
-  "title": "Landing page A",
-  "canvas": { "elements": [] }
+  "title": "Landing page campaign",
+  "canvas": {
+    "version": 1,
+    "elements": [
+      {
+        "id": "hero-title",
+        "type": "text",
+        "x": 120,
+        "y": 96,
+        "width": 640,
+        "height": 80,
+      }
+    ],
+    "appstate": { "backgroundColor": "#ffffff" }
+  }
 }
 
 ### List my lands

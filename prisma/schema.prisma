@@ -14,6 +14,12 @@ enum UserRole {
   SUPER_ADMIN
 }
 
+enum UserPlan {
+  FREE
+  PRO
+  ENTERPRISE
+}
+
 enum TemplateVisibility {
   PRIVATE
   UNLISTED
@@ -130,6 +136,7 @@ model User {
   passwordHash        String
   displayName         String?                  @db.VarChar(100)
   role                UserRole                 @default(USER)
+  plan                UserPlan                 @default(FREE)
   status              UserStatus               @default(PENDING_VERIFICATION)
   emailVerifiedAt     DateTime?
   lastLoginAt         DateTime?
@@ -156,6 +163,7 @@ model User {
   landRevisions       LandRevision[]            @relation("LandRevisionCreator")
 
   @@index([status])
+  @@index([plan])
   @@index([createdAt])
 }
 

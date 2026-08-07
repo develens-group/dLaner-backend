@@ -3,7 +3,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { UserRole, UserStatus } from '@prisma/client';
+import { UserPlan, UserRole, UserStatus } from '@prisma/client';
 import { ConfigService } from '@nestjs/config';
 import { AuditService } from '../audit/audit.service';
 import { AccessPrincipal } from '../common/auth.types';
@@ -15,6 +15,7 @@ const select = {
   email: true,
   displayName: true,
   role: true,
+  plan: true,
   status: true,
   emailVerifiedAt: true,
   lastLoginAt: true,
@@ -110,6 +111,18 @@ export class AdminService {
       select,
     });
     this.audit.record('user.unblocked', actor.userId, id);
+    return user;
+  }
+  async changePlan(actor: AccessPrincipal, id: string, plan: UserPlan) {
+    await this.assertCanAlter(actor, id);
+    const user = await this.prisma.user.update({
+      where: { id },
+      data: { plan },
+      select,
+    });
+    this.audit.record('user.plan_changed', actor.userId, id, 'User', {
+      plan,
+    });
     return user;
   }
   private async assertCanAlter(actor: AccessPrincipal, id: string) {

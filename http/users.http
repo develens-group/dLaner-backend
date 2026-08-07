@@ -21,4 +21,12 @@ Authorization: Bearer {{accessToken}}
 
 ### Common error: no bearer token
 GET {{baseUrl}}/api/v1/users/me
+### Admin: change user plan
+PATCH {{baseUrl}}/api/v1/admin/users/{{userId}}/plan
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "plan": "PRO"
+}
 

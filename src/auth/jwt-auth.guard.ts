@@ -74,6 +74,7 @@ export class JwtAuthGuard implements CanActivate {
         sessionId: session.id,
         email: session.user.email,
         role: session.user.role,
+        plan: session.user.plan,
         status: session.user.status,
         client:
           session.clientType === SessionClientType.WORDPRESS

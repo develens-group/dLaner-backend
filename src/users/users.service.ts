@@ -12,6 +12,7 @@ const selectUser = {
   email: true,
   displayName: true,
   role: true,
+  plan: true,
   status: true,
   emailVerifiedAt: true,
   lastLoginAt: true,

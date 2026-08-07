@@ -7,7 +7,13 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
-import { Prisma, SessionClientType, User, UserStatus } from '@prisma/client';
+import {
+  Prisma,
+  SessionClientType,
+  User,
+  UserPlan,
+  UserStatus,
+} from '@prisma/client';
 import * as argon2 from 'argon2';
 import { randomInt } from 'node:crypto';
 import { durationMs } from '../common/duration';
@@ -34,6 +40,7 @@ const publicUser = (user: User) => ({
   email: user.email,
   displayName: user.displayName,
   role: user.role,
+  plan: user.plan,
   status: user.status,
   emailVerifiedAt: user.emailVerifiedAt,
   lastLoginAt: user.lastLoginAt,
@@ -65,6 +72,7 @@ export class AuthService {
           email,
           passwordHash,
           displayName: dto.displayName?.trim(),
+          plan: UserPlan.FREE,
           status: verificationRequired
             ? UserStatus.PENDING_VERIFICATION
             : UserStatus.ACTIVE,
@@ -548,7 +556,14 @@ export class AuthService {
     const base = { sub: user.id, sid: sessionId };
     const [accessToken, refreshToken] = await Promise.all([
       this.jwt.signAsync(
-        { ...base, type: 'access', role: user.role, email: user.email, client },
+        {
+          ...base,
+          type: 'access',
+          role: user.role,
+          plan: user.plan,
+          email: user.email,
+          client,
+        },
         {
           secret: this.config.getOrThrow('JWT_ACCESS_SECRET'),
           expiresIn: this.config.getOrThrow('JWT_ACCESS_EXPIRES_IN'),
