@@ -4,60 +4,225 @@
   <meta charset="utf-8">
   <title>راهنمای اتصال افزونه WordPress به دیلندر</title>
   <style>
-    body { margin: 24px; color: #202433; font: 14px/1.9 Tahoma, Arial, sans-serif; }
-    h1,h2 { color: #4c1d95; }
-    pre { direction:ltr; text-align:left; background:#18132b; color:#ede9fe; border-radius:9px; padding:12px 14px; font:12px/1.6 Consolas,monospace; white-space:pre-wrap; }
-    code { direction:ltr; font-family:Consolas,monospace; background:#f3e8ff; color:#6b21a8; padding:1px 4px; border-radius:4px; }
-    .note { background:#fafafa; border-right:4px solid #8b5cf6; padding:10px 14px; margin:12px 0; }
-    table { width:100%; border-collapse:collapse; margin:12px 0; }
-    th,td { border:1px solid #e4def0; padding:8px; text-align:right; }
-    th { background:#f5f3ff; }
+    @page { size: A4; margin: 18mm 16mm 20mm; @bottom-center { content: "Dlander — WordPress Plugin Connect"; font: 9px Tahoma; color: #64748b; } }
+    * { box-sizing: border-box; }
+    body { margin: 0; color: #202433; font: 12px/2 Tahoma, Arial, sans-serif; background: white; }
+    h1,h2,h3 { color: #4c1d95; margin: 0 0 8px; page-break-after: avoid; }
+    h1 { font-size: 26px; } h2 { font-size: 18px; margin-top: 22px; border-bottom: 2px solid #ede9fe; padding-bottom: 5px; }
+    h3 { font-size: 14px; margin-top: 14px; } p { margin: 5px 0 10px; }
+    ul,ol { margin: 5px 0 12px; padding-right: 24px; } li { margin: 3px 0; }
+    .cover { min-height: 245mm; display: flex; flex-direction: column; justify-content: center; padding: 25mm 12mm; background: linear-gradient(150deg,#f5f3ff,#fff 52%,#faf5ff); }
+    .badge { display:inline-block; width:fit-content; background:#6d28d9; color:#fff; border-radius:99px; padding:3px 12px; margin-bottom:18px; }
+    .subtitle { font-size:15px; color:#57536a; max-width:560px; }
+    .cover-grid { margin-top:32px; display:grid; grid-template-columns:repeat(2,1fr); gap:10px; }
+    .cover-card,.note,.security,.warning { border-radius:10px; padding:12px 15px; page-break-inside:avoid; }
+    .cover-card { background:rgba(255,255,255,.82); border:1px solid #ddd6fe; }
+    .note { background:#fafafa; border-right:4px solid #8b5cf6; margin:12px 0; }
+    .security { background:#ecfdf5; border:1px solid #a7f3d0; margin:12px 0; }
+    .warning { background:#fff7ed; border:1px solid #fed7aa; margin:12px 0; }
+    pre { direction:ltr; text-align:left; unicode-bidi:embed; white-space:pre-wrap; word-break:break-word; background:#18132b; color:#ede9fe; border-radius:9px; padding:12px 14px; font:10.5px/1.65 Consolas,monospace; page-break-inside:avoid; }
+    code { direction:ltr; unicode-bidi:embed; font-family:Consolas,monospace; background:#f3e8ff; color:#6b21a8; padding:1px 4px; border-radius:4px; }
+    pre code { background:none; color:inherit; padding:0; }
+    table { width:100%; border-collapse:collapse; margin:10px 0 16px; page-break-inside:avoid; }
+    th,td { border:1px solid #e4def0; padding:7px 9px; text-align:right; }
+    th { background:#f5f3ff; color:#5b21b6; }
+    .page-break { page-break-before:always; }
   </style>
 </head>
 <body>
-  <h1>اتصال افزونه WordPress به دیلندر</h1>
-  <p>لاگین جدا با ایمیل/رمز از افزونه حذف شده است. افزونه کلید را می‌سازد، درخواست اتصال می‌فرستد، و کاربر در سایت دیلندر تأیید یا لاگین می‌کند.</p>
+  <section class="cover">
+    <span class="badge">Dlander Backend · WordPress Plugin Guide</span>
+    <h1>راهنمای کامل افزونه WordPress</h1>
+    <p class="subtitle">اتصال بدون لاگین ایمیل/رمز در افزونه، ساخت کلید توسط پلاگین، تأیید در سایت دیلندر، احراز با Installation Key، و تبادل متن/عکس/ویدیو از طریق edit-session</p>
+    <div class="cover-grid">
+      <div class="cover-card"><b>لاگین کاربر</b><br>فقط در دیلندر (WEB)</div>
+      <div class="cover-card"><b>کلید نصب</b><br>تولید در افزونه</div>
+      <div class="cover-card"><b>API بعدی</b><br>Key + Site-Url</div>
+      <div class="cover-card"><b>حذف‌شده</b><br>wordpress/login</div>
+    </div>
+  </section>
 
-  <h2>۱. ساخت درخواست اتصال</h2>
-  <pre>POST /api/v1/wordpress/connection-requests
+  <main>
+    <h2>۰. مدل جدید اتصال</h2>
+    <ol>
+      <li>افزونه یک <code>installationKey</code> تصادفی می‌سازد (حداقل ۳۲ کاراکتر).</li>
+      <li>افزونه درخواست اتصال به بک‌اند می‌فرستد (فقط هش کلید ذخیره می‌شود).</li>
+      <li>افزونه تب دیلندر را با <code>approveUrl</code> باز می‌کند.</li>
+      <li>کاربر در دیلندر لاگین می‌کند (اگر نبود) و اتصال را تأیید می‌کند.</li>
+      <li>افزونه وضعیت را poll می‌کند تا <code>APPROVED</code> شود.</li>
+      <li>از آن به بعد APIها با هدرهای Installation Key + Site URL صدا زده می‌شوند.</li>
+    </ol>
+    <div class="warning"><code>POST /api/v1/auth/wordpress/login</code> حذف شده است. ایمیل و رمز کاربر را از فرم افزونه جمع نکنید.</div>
+    <div class="note">اتصال برقرارشده انقضای اجباری ندارد. قطع اتصال از پنل دیلندر یا غیرفعال‌سازی/چرخش کلید انجام می‌شود. درخواست pending حدود ۱۵ دقیقه عمر دارد.</div>
+
+    <h2>۱. تنظیمات پایه افزونه</h2>
+    <pre>define('DLANDER_API_URL', 'https://api.example.com'); // بدون اسلش انتهایی
+define('DLANDER_PLUGIN_VERSION', '1.0.0');</pre>
+    <p>مقادیر پیشنهادی در Options (رمزنگاری در صورت امکان):</p>
+    <pre>dlander_installation_key
+dlander_site_url
+dlander_connected          // bool
+dlander_wordpress_site_id  // اختیاری بعد از approve
+dlander_last_request_id</pre>
+
+    <h2>۲. ساخت کلید نصب</h2>
+    <pre>function dlander_generate_installation_key(): string {
+    return rtrim(strtr(base64_encode(random_bytes(32)), '+/', '-_'), '=');
+}
+
+$key = get_option('dlander_installation_key');
+if (!$key) {
+    $key = dlander_generate_installation_key();
+    update_option('dlander_installation_key', $key, false);
+}</pre>
+
+    <h2 class="page-break">۳. ایجاد درخواست اتصال</h2>
+    <pre>POST {DLANDER_API_URL}/api/v1/wordpress/connection-requests
 Content-Type: application/json
 
 {
   "siteUrl": "https://shop.example.com",
   "installationKey": "PLUGIN_GENERATED_KEY_32PLUS",
   "siteName": "فروشگاه من",
-  "metadata": { "wpVersion": "6.8", "pluginVersion": "1.0.0" }
+  "metadata": {
+    "wpVersion": "6.8",
+    "phpVersion": "8.3",
+    "pluginVersion": "1.0.0",
+    "multisite": false
+  }
 }</pre>
-  <p>پاسخ: <code>requestId</code>، <code>expiresAt</code> (حدود ۱۵ دقیقه)، <code>approveUrl</code>.</p>
+    <pre>{
+  "data": {
+    "requestId": "uuid",
+    "status": "PENDING",
+    "domain": "shop.example.com",
+    "expiresAt": "2026-08-19T12:15:00.000Z",
+    "approveUrl": "https://dlander.com/connect/wordpress?requestId=uuid"
+  },
+  "meta": null
+}</pre>
+    <div class="warning">فقط metadata غیرحساس بفرستید. رمز DB، کلیدهای wp-config و secretها ممنوع است.</div>
+    <p><code>siteUrl</code> می‌تواند لوکال باشد (<code>http://localhost:8080</code>)؛ بک‌اند فقط hostname را نرمال می‌کند.</p>
 
-  <h2>۲. تأیید در دیلندر</h2>
-  <p>افزونه <code>approveUrl</code> را باز می‌کند. کاربر با نشست وب تأیید می‌کند:</p>
-  <pre>POST /api/v1/wordpress/connection-requests/:id/approve
-Authorization: Bearer WEB_ACCESS_TOKEN</pre>
-  <p>وضعیت: <code>GET /api/v1/wordpress/connection-requests/:id</code></p>
+    <h3>نمونه PHP</h3>
+    <pre>$response = wp_remote_post(DLANDER_API_URL . '/api/v1/wordpress/connection-requests', [
+    'timeout' => 20,
+    'headers' => ['Content-Type' => 'application/json'],
+    'body' => wp_json_encode([
+        'siteUrl' => home_url(),
+        'installationKey' => $key,
+        'siteName' => get_bloginfo('name'),
+        'metadata' => [
+            'wpVersion' => get_bloginfo('version'),
+            'phpVersion' => PHP_VERSION,
+            'pluginVersion' => DLANDER_PLUGIN_VERSION,
+        ],
+    ]),
+]);
+$data = json_decode(wp_remote_retrieve_body($response), true)['data'];
+update_option('dlander_last_request_id', $data['requestId'], false);
+// باز کردن تب تأیید برای کاربر ادمین:
+// window.open($data['approveUrl'], '_blank');</pre>
 
-  <h2>۳. هدرهای بعدی افزونه</h2>
-  <pre>X-Dlander-Installation-Key: PLUGIN_GENERATED_KEY
+    <h2>۴. Poll وضعیت تا تأیید</h2>
+    <pre>GET {DLANDER_API_URL}/api/v1/wordpress/connection-requests/{requestId}</pre>
+    <p>وضعیت‌ها: <code>PENDING</code> | <code>APPROVED</code> | <code>DENIED</code> | <code>EXPIRED</code></p>
+    <pre>// هر ۲–۳ ثانیه تا APPROVED یا خطا
+$status = $body['data']['status'];
+if ($status === 'APPROVED') {
+    update_option('dlander_connected', true, false);
+    update_option('dlander_site_url', home_url(), false);
+    if (!empty($body['data']['wordpressSiteId'])) {
+        update_option('dlander_wordpress_site_id', $body['data']['wordpressSiteId'], false);
+    }
+}</pre>
+    <p>اگر <code>EXPIRED</code> یا <code>DENIED</code> شد، درخواست جدید بسازید. UI باید بگوید کاربر در دیلندر باید لاگین/تأیید کند.</p>
+
+    <h2 class="page-break">۵. احراز هویت API بعد از اتصال</h2>
+    <pre>X-Dlander-Installation-Key: PLUGIN_GENERATED_KEY
 X-Dlander-Site-Url: https://shop.example.com</pre>
-  <div class="note">JWT وردپرس دیگر لازم نیست. اتصال برقرارشده انقضای اجباری ندارد.</div>
+    <p>JWT وردپرس لازم نیست. Bearer وب هم از افزونه نفرستید مگر برای سناریوهای خاص فرانت.</p>
+    <pre>function dlander_api_headers(): array {
+    return [
+        'Content-Type' => 'application/json',
+        'X-Dlander-Installation-Key' => get_option('dlander_installation_key'),
+        'X-Dlander-Site-Url' => home_url(),
+    ];
+}</pre>
+    <p>خطاها: <code>INVALID_INSTALLATION_KEY</code>، <code>SITE_DISABLED</code>.</p>
 
-  <h2>۴. مدیریت از وب</h2>
-  <table>
-    <tr><th>عمل</th><th>Endpoint</th></tr>
-    <tr><td>فهرست</td><td><code>GET /api/v1/users/me/wordpress-sites</code></td></tr>
-    <tr><td>نام / غیرفعال</td><td><code>PATCH .../:id</code></td></tr>
-    <tr><td>قطع اتصال</td><td><code>DELETE .../:id</code></td></tr>
-    <tr><td>چرخش کلید</td><td><code>POST .../:id/rotate-key</code></td></tr>
-  </table>
+    <h2>۶. شروع کار ادیت (متن / عکس / ویدیو)</h2>
+    <h3>۶.۱ ساخت جلسه</h3>
+    <pre>POST /api/v1/wordpress/edit-sessions
+X-Dlander-Installation-Key: ...
+X-Dlander-Site-Url: ...
+Content-Type: application/json
 
-  <h2>۵. جلسه ادیت</h2>
-  <pre>POST /api/v1/wordpress/edit-sessions
-POST /api/v1/wordpress/edit-sessions/:id/assets
-GET  /api/v1/wordpress/edit-sessions/:id
-POST /api/v1/wordpress/edit-sessions/:id/complete   (وب)
-GET  /api/v1/wordpress/edit-sessions/:id/result     (افزونه)</pre>
+{
+  "inputText": "متن صفحه برای ویرایش",
+  "inputJson": { "postId": 123, "field": "content" }
+}</pre>
+    <p>پاسخ شامل <code>id</code>، <code>editorUrl</code>، <code>expiresAt</code> است. <code>editorUrl</code> را برای کاربر ادمین باز کنید تا در دیلندر کار کند.</p>
 
-  <h2>حذف‌شده</h2>
-  <p><code>POST /api/v1/auth/wordpress/login</code></p>
+    <h3>۶.۲ آپلود ورودی</h3>
+    <pre>POST /api/v1/wordpress/edit-sessions/{id}/assets
+X-Dlander-Installation-Key: ...
+X-Dlander-Site-Url: ...
+Content-Type: multipart/form-data
+
+file=@image.jpg
+direction=input</pre>
+    <p>مجاز: <code>image/jpeg|png|webp|gif</code> تا ۱۰MB و <code>video/mp4|webm</code> تا ۱۰۰MB.</p>
+
+    <h3>۶.۳ گرفتن نتیجه</h3>
+    <pre>GET /api/v1/wordpress/edit-sessions/{id}/result
+X-Dlander-Installation-Key: ...
+X-Dlander-Site-Url: ...</pre>
+    <p>وقتی وضعیت <code>COMPLETED</code> باشد، <code>outputText</code> / <code>outputJson</code> و assetهای خروجی با <code>downloadUrl</code> برمی‌گردند. می‌توانید قبل از complete با <code>GET .../edit-sessions/{id}</code> وضعیت را poll کنید.</p>
+
+    <h2 class="page-break">۷. قطع اتصال و چرخش کلید</h2>
+    <ul>
+      <li>کاربر می‌تواند از پنل دیلندر سایت را Delete یا Disable کند → API افزونه با <code>SITE_DISABLED</code> / کلید نامعتبر شکست می‌خورد.</li>
+      <li>اگر از وب <code>rotate-key</code> زده شود، کلید قبلی باطل است؛ افزونه باید کلید جدید را از کاربر بگیرد یا دوباره connect کند.</li>
+      <li>پیشنهاد UX افزونه: دکمه «قطع اتصال محلی» که Options را پاک کند و دکمه «اتصال مجدد به دیلندر» که flow بخش ۳ را از نو اجرا کند.</li>
+    </ul>
+
+    <h2>۸. چند دامنه / لوکال</h2>
+    <p>هر نصب وردپرس (هر دامنه یا localhost) flow اتصال خودش را دارد. یک اکانت دیلندر می‌تواند چند سایت متصل داشته باشد. دامنه در بک‌اند نرمال می‌شود؛ مسیر و پروتکل در هویت نصب دخیل نیستند.</p>
+
+    <h2>۹. امنیت</h2>
+    <div class="security">
+      <ul>
+        <li>کلید خام فقط در افزونه؛ در API فقط هش ذخیره می‌شود.</li>
+        <li>تأیید اتصال فقط با نشست وب کاربر در دیلندر.</li>
+        <li>درخواست pending کوتاه‌عمر است.</li>
+        <li>Rate limit روی create/poll اعمال می‌شود.</li>
+        <li>هرگز access/refresh وب کاربر را در وردپرس ذخیره نکنید مگر نیاز صریح محصول.</li>
+      </ul>
+    </div>
+
+    <h2>۱۰. چک‌لیست پیاده‌سازی افزونه</h2>
+    <ul>
+      <li>تولید و ذخیره امن installation key</li>
+      <li>create connection-request + باز کردن approveUrl</li>
+      <li>poll تا APPROVED / نمایش خطاهای DENIED و EXPIRED</li>
+      <li>فراخوانی API با دو هدر Installation</li>
+      <li>edit-session + آپلود asset + باز کردن editorUrl + دریافت result</li>
+      <li>UI اتصال مجدد پس از disable/rotate</li>
+      <li>حذف وابستگی به <code>/auth/wordpress/login</code></li>
+    </ul>
+
+    <h2>۱۱. جدول Endpointهای افزونه</h2>
+    <table>
+      <tr><th>عمل</th><th>Method / Path</th><th>Auth</th></tr>
+      <tr><td>شروع اتصال</td><td><code>POST /api/v1/wordpress/connection-requests</code></td><td>عمومی</td></tr>
+      <tr><td>وضعیت اتصال</td><td><code>GET /api/v1/wordpress/connection-requests/:id</code></td><td>عمومی</td></tr>
+      <tr><td>ساخت ادیت</td><td><code>POST /api/v1/wordpress/edit-sessions</code></td><td>Key+URL</td></tr>
+      <tr><td>آپلود ورودی</td><td><code>POST .../edit-sessions/:id/assets</code></td><td>Key+URL</td></tr>
+      <tr><td>وضعیت ادیت</td><td><code>GET .../edit-sessions/:id</code></td><td>Key+URL</td></tr>
+      <tr><td>نتیجه</td><td><code>GET .../edit-sessions/:id/result</code></td><td>Key+URL</td></tr>
+    </table>
+    <p>Approve/Deny و complete ادیتور فقط از فرانت دیلندر انجام می‌شود، نه از افزونه.</p>
+  </main>
 </body>
 </html>
