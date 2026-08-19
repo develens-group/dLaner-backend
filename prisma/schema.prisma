@@ -64,6 +64,20 @@ enum SessionClientType {
   WORDPRESS
 }
 
+enum WordPressConnectionRequestStatus {
+  PENDING
+  APPROVED
+  DENIED
+  EXPIRED
+}
+
+enum WordPressEditSessionStatus {
+  OPEN
+  COMPLETED
+  CANCELLED
+  EXPIRED
+}
+
 enum ApiRequestSource {
   WEB
   MOBILE
@@ -144,8 +158,10 @@ model User {
   updatedAt           DateTime                 @updatedAt
   deletedAt           DateTime?
   sessions            Session[]
-  wordpressSites      WordPressSite[]
-  verificationTokens  EmailVerificationToken[]
+  wordpressSites              WordPressSite[]
+  wordpressConnectionRequests WordPressConnectionRequest[]
+  wordpressEditSessions       WordPressEditSession[]
+  verificationTokens          EmailVerificationToken[]
   passwordResetTokens PasswordResetToken[]
   apiRequests         ApiRequestRecord[]
   aiRequests          AiRequest[]
@@ -609,21 +625,80 @@ model Session {
 }
 
 model WordPressSite {
-  id                  String    @id @default(uuid()) @db.Uuid
-  userId              String    @db.Uuid
-  name                String?   @db.VarChar(100)
-  domain              String    @db.VarChar(253)
-  installationKeyHash String    @db.VarChar(64)
+  id                  String                       @id @default(uuid()) @db.Uuid
+  userId              String                       @db.Uuid
+  name                String?                      @db.VarChar(100)
+  domain              String                       @db.VarChar(253)
+  installationKeyHash String                       @db.VarChar(64)
   metadataJson        Json?
-  enabled             Boolean   @default(true)
+  enabled             Boolean                      @default(true)
   lastConnectedAt     DateTime?
-  createdAt           DateTime  @default(now())
-  updatedAt           DateTime  @updatedAt
-  user                User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt           DateTime                     @default(now())
+  updatedAt           DateTime                     @updatedAt
+  user                User                         @relation(fields: [userId], references: [id], onDelete: Cascade)
   sessions            Session[]
+  connectionRequests  WordPressConnectionRequest[]
+  editSessions        WordPressEditSession[]
 
   @@unique([userId, domain])
   @@index([userId, enabled, createdAt])
+  @@index([domain, enabled])
+}
+
+model WordPressConnectionRequest {
+  id                  String                           @id @default(uuid()) @db.Uuid
+  domain              String                           @db.VarChar(253)
+  siteName            String?                          @db.VarChar(100)
+  installationKeyHash String                           @db.VarChar(64)
+  metadataJson        Json?
+  status              WordPressConnectionRequestStatus @default(PENDING)
+  expiresAt           DateTime
+  userId              String?                          @db.Uuid
+  wordpressSiteId     String?                          @db.Uuid
+  createdAt           DateTime                         @default(now())
+  updatedAt           DateTime                         @updatedAt
+  user                User?                            @relation(fields: [userId], references: [id], onDelete: SetNull)
+  wordpressSite       WordPressSite?                   @relation(fields: [wordpressSiteId], references: [id], onDelete: SetNull)
+
+  @@index([status, expiresAt])
+  @@index([domain, status])
+}
+
+model WordPressEditSession {
+  id              String                     @id @default(uuid()) @db.Uuid
+  userId          String                     @db.Uuid
+  wordpressSiteId String                     @db.Uuid
+  status          WordPressEditSessionStatus @default(OPEN)
+  expiresAt       DateTime
+  inputText       String?                    @db.Text
+  inputJson       Json?
+  outputText      String?                    @db.Text
+  outputJson      Json?
+  createdAt       DateTime                   @default(now())
+  updatedAt       DateTime                   @updatedAt
+  completedAt     DateTime?
+  user            User                       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  wordpressSite   WordPressSite              @relation(fields: [wordpressSiteId], references: [id], onDelete: Cascade)
+  assets          WordPressEditAsset[]
+
+  @@index([wordpressSiteId, status, createdAt])
+  @@index([userId, status, createdAt])
+  @@index([expiresAt])
+}
+
+model WordPressEditAsset {
+  id            String              @id @default(uuid()) @db.Uuid
+  editSessionId String              @db.Uuid
+  direction     String              @db.VarChar(16)
+  kind          String              @db.VarChar(16)
+  storageKey    String              @db.VarChar(512)
+  contentType   String              @db.VarChar(128)
+  byteSize      Int
+  originalName  String?             @db.VarChar(255)
+  createdAt     DateTime            @default(now())
+  editSession   WordPressEditSession @relation(fields: [editSessionId], references: [id], onDelete: Cascade)
+
+  @@index([editSessionId, direction, createdAt])
 }
 
 model EmailVerificationToken {

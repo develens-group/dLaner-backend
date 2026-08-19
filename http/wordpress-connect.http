@@ -1,0 +1,45 @@
+### Create connection request (plugin)
+# POST {{baseUrl}}/api/v1/wordpress/connection-requests
+Content-Type: application/json
+
+{
+  "siteUrl": "https://shop.example.com",
+  "installationKey": "replace-with-32plus-char-random-key-here",
+  "siteName": "My shop",
+  "metadata": { "pluginVersion": "1.0.0" }
+}
+
+### Poll connection request
+# GET {{baseUrl}}/api/v1/wordpress/connection-requests/{{requestId}}
+
+### Approve (web Bearer)
+# POST {{baseUrl}}/api/v1/wordpress/connection-requests/{{requestId}}/approve
+Authorization: Bearer {{accessToken}}
+
+### Deny (web Bearer)
+# POST {{baseUrl}}/api/v1/wordpress/connection-requests/{{requestId}}/deny
+Authorization: Bearer {{accessToken}}
+
+### Create edit session (plugin headers)
+# POST {{baseUrl}}/api/v1/wordpress/edit-sessions
+Content-Type: application/json
+X-Dlander-Installation-Key: {{installationKey}}
+X-Dlander-Site-Url: https://shop.example.com
+
+{
+  "inputText": "Hello from WordPress"
+}
+
+### Complete edit session (web)
+# POST {{baseUrl}}/api/v1/wordpress/edit-sessions/{{editSessionId}}/complete
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "outputText": "Edited copy"
+}
+
+### Fetch result (plugin)
+# GET {{baseUrl}}/api/v1/wordpress/edit-sessions/{{editSessionId}}/result
+X-Dlander-Installation-Key: {{installationKey}}
+X-Dlander-Site-Url: https://shop.example.com

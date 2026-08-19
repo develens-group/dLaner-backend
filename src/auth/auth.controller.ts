@@ -28,7 +28,6 @@ import {
   TokenDto,
 } from './auth.dto';
 import { AuthService } from './auth.service';
-import { WordPressLoginDto } from '../wordpress/wordpress.dto';
 
 @ApiTags('auth')
 @Controller('api/v1/auth')
@@ -81,19 +80,6 @@ export class AuthController {
     @Res({ passthrough: true }) res: Response,
   ) {
     const result = await this.auth.login(dto, getClientContext(req));
-    return response(this.transportTokens(result, res));
-  }
-
-  @Public()
-  @Post('wordpress/login')
-  @HttpCode(HttpStatus.OK)
-  @Throttle({ default: { limit: 5, ttl: 60_000 } })
-  async wordpressLogin(
-    @Body() dto: WordPressLoginDto,
-    @Req() req: Request,
-    @Res({ passthrough: true }) res: Response,
-  ) {
-    const result = await this.auth.wordpressLogin(dto, getClientContext(req));
     return response(this.transportTokens(result, res));
   }
 

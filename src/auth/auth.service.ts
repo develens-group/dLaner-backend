@@ -32,7 +32,6 @@ import {
   ResetPasswordDto,
 } from './auth.dto';
 import { JwtClaims } from '../common/auth.types';
-import { WordPressLoginDto } from '../wordpress/wordpress.dto';
 import { normalizeWordPressDomain } from '../wordpress/wordpress-site';
 
 const publicUser = (user: User) => ({
@@ -170,68 +169,6 @@ export class AuthService {
         data: { lastLoginAt: new Date() },
       });
       return { ...tokens, user: publicUser(user) };
-    });
-  }
-
-  async wordpressLogin(dto: WordPressLoginDto, context: ClientContext) {
-    const user = await this.authenticateUser(dto, context);
-    const domain = normalizeWordPressDomain(dto.siteUrl);
-    const installationKey = createOpaqueToken();
-    return this.prisma.$transaction(async (tx) => {
-      const existing = await tx.wordPressSite.findUnique({
-        where: { userId_domain: { userId: user.id, domain } },
-      });
-      if (existing && !existing.enabled)
-        throw new ForbiddenException('This WordPress site is disabled');
-      const site = existing
-        ? await tx.wordPressSite.update({
-            where: { id: existing.id },
-            data: {
-              name: dto.siteName?.trim() ?? existing.name,
-              metadataJson: dto.metadata as Prisma.InputJsonValue | undefined,
-              installationKeyHash: hashOpaqueToken(installationKey),
-              lastConnectedAt: new Date(),
-            },
-          })
-        : await tx.wordPressSite.create({
-            data: {
-              userId: user.id,
-              domain,
-              name: dto.siteName?.trim(),
-              metadataJson: dto.metadata as Prisma.InputJsonValue | undefined,
-              installationKeyHash: hashOpaqueToken(installationKey),
-              lastConnectedAt: new Date(),
-            },
-          });
-      await tx.session.updateMany({
-        where: { wordpressSiteId: site.id, revokedAt: null },
-        data: { revokedAt: new Date() },
-      });
-      const session = await tx.session.create({
-        data: {
-          userId: user.id,
-          clientType: SessionClientType.WORDPRESS,
-          wordpressSiteId: site.id,
-          refreshTokenHash: 'pending',
-          expiresAt: this.expiry('JWT_REFRESH_EXPIRES_IN'),
-          ...context,
-        },
-      });
-      const tokens = await this.issueTokens(user, session.id, 'wordpress');
-      await tx.session.update({
-        where: { id: session.id },
-        data: { refreshTokenHash: await argon2.hash(tokens.refreshToken) },
-      });
-      await tx.user.update({
-        where: { id: user.id },
-        data: { lastLoginAt: new Date() },
-      });
-      return {
-        ...tokens,
-        installationKey,
-        site: { id: site.id, domain: site.domain, enabled: site.enabled },
-        user: publicUser(user),
-      };
     });
   }
 

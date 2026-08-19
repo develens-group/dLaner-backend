@@ -1,7 +1,7 @@
 # WordPress Plugin Connect + Edit Bridge — Design
 
 Date: 2026-08-19  
-Status: approved for implementation (pending user review of this file)
+Status: implemented (backend)
 
 ## Goal
 

@@ -13,10 +13,7 @@ import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { response } from '../common/api-response';
 import type { AccessPrincipal } from '../common/auth.types';
 import { CurrentUser } from '../common/decorators';
-import {
-  CreateWordPressSiteDto,
-  UpdateWordPressSiteDto,
-} from './wordpress.dto';
+import { UpdateWordPressSiteDto } from './wordpress.dto';
 import { WordPressService } from './wordpress.service';
 
 @ApiTags('wordpress')
@@ -29,15 +26,6 @@ export class WordPressController {
   async list(@CurrentUser() user: AccessPrincipal) {
     this.assertWebClient(user);
     return response(await this.wordpress.list(user.userId));
-  }
-
-  @Post()
-  async create(
-    @CurrentUser() user: AccessPrincipal,
-    @Body() dto: CreateWordPressSiteDto,
-  ) {
-    this.assertWebClient(user);
-    return response(await this.wordpress.create(user.userId, dto));
   }
 
   @Patch(':id')

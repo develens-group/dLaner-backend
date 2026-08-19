@@ -1,57 +1,82 @@
-# اتصال امن افزونه وردپرس
+# اتصال افزونه وردپرس به دیلندر
 
-## ورود افزونه
+جریان محصول دیگر لاگین جدا با ایمیل/رمز از داخل افزونه ندارد و دامنه را
+دستی در پنل دیلندر از قبل ثبت نمی‌کنید. افزونه کلید نصب را خودش می‌سازد،
+درخواست اتصال می‌فرستد، و کاربر در **سایت دیلندر** (تب/پاپ‌آپ) لاگین یا تأیید می‌کند.
 
-افزونه به `POST /api/v1/auth/wordpress/login` درخواست می‌زند:
+## ۱) ایجاد درخواست اتصال (افزونه)
+
+افزونه یک `installationKey` تصادفی می‌سازد و فقط همان را نزد خود نگه می‌دارد.
+سپس:
+
+`POST /api/v1/wordpress/connection-requests`
 
 ```json
 {
-  "email": "user@example.com",
-  "password": "StrongPass123",
   "siteUrl": "https://shop.example.com",
+  "installationKey": "<کلید-۳۲-کاراکتر-یا-بیشتر>",
   "siteName": "فروشگاه من",
-  "metadata": { "wpVersion": "6.8", "phpVersion": "8.3", "pluginVersion": "1.0.0" }
+  "metadata": { "wpVersion": "6.8", "pluginVersion": "1.0.0" }
 }
 ```
 
-پاسخ شامل `accessToken`، `refreshToken`، `installationKey` و اطلاعات `site`
-است. افزونه باید هر سه مقدار محرمانه را ذخیره کند. هر ورود مجدد، کلید نصب را
-عوض و نشست‌های قبلی همان دامنه را باطل می‌کند.
+پاسخ شامل `requestId`، `expiresAt` (حدود ۱۵ دقیقه) و `approveUrl` است.
+در بک‌اند فقط **هش** کلید ذخیره می‌شود.
 
-## درخواست‌های بعدی
+## ۲) تأیید در دیلندر (مرورگر وب)
 
-تمام درخواست‌های محافظت‌شده افزونه باید این هدرها را ارسال کنند:
+افزونه `approveUrl` را باز می‌کند، مثلاً:
+
+`{FRONTEND_URL}/connect/wordpress?requestId=...`
+
+- اگر کاربر لاگین وب نباشد → اول لاگین وب
+- سپس اکانت و دامنه را می‌بیند و تأیید می‌کند:
+
+`POST /api/v1/wordpress/connection-requests/:id/approve`  
+(با `Authorization: Bearer <accessToken>` نشست وب)
+
+رد کردن: `POST .../:id/deny`
+
+افزونه وضعیت را poll می‌کند:
+
+`GET /api/v1/wordpress/connection-requests/:id`  
+→ `PENDING | APPROVED | DENIED | EXPIRED`
+
+پس از `APPROVED`، سایت به اکانت وصل است و **انقضای اجباری ندارد**. قطع اتصال با
+حذف سایت، غیرفعال‌سازی، یا چرخش کلید انجام می‌شود.
+
+## ۳) احراز هویت درخواست‌های بعدی افزونه
 
 ```http
-Authorization: Bearer <accessToken>
 X-Dlander-Installation-Key: <installationKey>
 X-Dlander-Site-Url: https://shop.example.com
 ```
 
-برای `POST /api/v1/auth/refresh` نیز دو هدر `X-Dlander-*` الزامی‌اند و بدنه
-`{ "refreshToken": "<refreshToken>" }` است. هدر دامنه به تنهایی عامل امنیتی
-نیست؛ عامل دوم کلید تصادفی نصب است.
+توکن JWT وردپرس لازم نیست.
 
-## تنظیمات در React
-
-این endpointها فقط با نشست عادی وب قابل استفاده‌اند:
+## ۴) مدیریت سایت‌های متصل (فقط وب)
 
 - `GET /api/v1/users/me/wordpress-sites`
-- `POST /api/v1/users/me/wordpress-sites`
-- `PATCH /api/v1/users/me/wordpress-sites/:id`
-- `DELETE /api/v1/users/me/wordpress-sites/:id`
-- `POST /api/v1/users/me/wordpress-sites/:id/rotate-key`
+- `PATCH /api/v1/users/me/wordpress-sites/:id` — `name` / `enabled` (تغییر دامنه از این مسیر نیست؛ اتصال مجدد)
+- `DELETE /api/v1/users/me/wordpress-sites/:id` — قطع اتصال
+- `POST /api/v1/users/me/wordpress-sites/:id/rotate-key` — کلید جدید (یک‌بار در پاسخ؛ باید در افزونه جایگزین شود)
 
-بدنه ایجاد سایت `{ "domain": "shop.example.com", "name": "فروشگاه" }` است.
-ویرایش می‌تواند شامل `domain`، `name` و `enabled` باشد. تغییر دامنه،
-غیرفعال‌سازی و تعویض کلید، نشست‌های فعال آن نصب را فوراً باطل می‌کند. کلید نصب
-فقط هنگام ایجاد، ورود افزونه یا تعویض کلید برگردانده می‌شود و در دیتابیس فقط هش
-آن ذخیره می‌شود.
+## ۵) جلسه ادیت (متن / عکس / ویدیو)
 
-## کپچای ورود
+بعد از اتصال:
 
-پس از دومین ورود ناموفق، پاسخ دارای `code: "CAPTCHA_REQUIRED"` و
-`captchaRequired: true` است. کلاینت با ارسال ایمیل به
-`POST /api/v1/auth/captcha` تصویر و `captchaId` می‌گیرد و سپس `captchaId` و
-`captchaCode` را همراه درخواست ورود عادی یا وردپرس می‌فرستد. چالش پنج دقیقه
-اعتبار دارد، یک‌بارمصرف است و پس از پنج پاسخ اشتباه دیگر پذیرفته نمی‌شود.
+1. افزونه `POST /api/v1/wordpress/edit-sessions` با هدرهای نصب (+ متن اختیاری)
+2. آپلود ورودی: `POST .../edit-sessions/:id/assets` (multipart فیلد `file`)
+3. کاربر در `editorUrl` برگشتی روی دیلندر کار می‌کند (نشست وب)
+4. ادیتور `POST .../:id/complete` و در صورت نیاز `POST .../:id/output-assets`
+5. افزونه `GET .../:id/result` را می‌گیرد
+
+انواع مجاز: `image/jpeg|png|webp|gif` (تا ۱۰MB) و `video/mp4|webm` (تا ۱۰۰MB).
+
+## استفاده بدون افزونه
+
+لاگین وب، lands، templates و بقیه APIها مستقل‌اند و به اتصال وردپرس وابسته نیستند.
+
+## حذف‌شده
+
+- `POST /api/v1/auth/wordpress/login`
