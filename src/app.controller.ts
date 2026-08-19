@@ -1,5 +1,12 @@
-import { Controller, Get, Header, Res } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Header,
+  NotFoundException,
+  Res,
+} from '@nestjs/common';
 import type { Response } from 'express';
+import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { Public } from './common/decorators';
 import { AppService } from './app.service';
@@ -49,11 +56,29 @@ export class AppController {
   }
 
   private sendPdf(res: Response, filename: string) {
+    const path = this.resolvePdfPath(filename);
     res.set({
       'Content-Type': 'application/pdf',
       'Content-Disposition': `inline; filename="${filename}"`,
-      'Cache-Control': 'public, max-age=3600, immutable',
+      'Cache-Control': 'public, max-age=300',
     });
-    return res.sendFile(join(__dirname, 'assets', 'docs', filename));
+    return res.sendFile(path);
+  }
+
+  private resolvePdfPath(filename: string) {
+    const candidates = [
+      // nest build: controller in dist/src, assets in dist/assets/docs
+      join(__dirname, '..', 'assets', 'docs', filename),
+      // controller and assets side-by-side
+      join(__dirname, 'assets', 'docs', filename),
+      // nest start:dev / cwd fallbacks
+      join(process.cwd(), 'dist', 'assets', 'docs', filename),
+      join(process.cwd(), 'src', 'assets', 'docs', filename),
+      join(process.cwd(), 'docs', filename),
+    ];
+    for (const candidate of candidates) {
+      if (existsSync(candidate)) return candidate;
+    }
+    throw new NotFoundException(`PDF guide not found: ${filename}`);
   }
 }

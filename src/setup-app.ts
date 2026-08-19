@@ -14,6 +14,8 @@ export function setupApplication(app: NestExpressApplication) {
       contentSecurityPolicy: {
         directives: {
           scriptSrc: ["'self'", 'https://cdn.jsdelivr.net'],
+          // Allow the browser PDF viewer for /docs/*.pdf
+          objectSrc: ["'self'"],
         },
       },
     }),
