@@ -67,10 +67,12 @@ export class CloudflareD1AiHistoryStore implements AiHistoryStore {
   }
 
   async complete(id: string, outputJson: unknown) {
-    await this.query(
+    const response = await this.request<never>(
       `UPDATE ai_history SET output_json = ?, updated_at = ? WHERE id = ?`,
       [JSON.stringify(outputJson), new Date().toISOString(), id],
     );
+    if ((response.result?.[0]?.meta?.changes ?? 0) !== 1)
+      throw new Error(`Cloudflare D1 history row ${id} was not found`);
   }
 
   async getMany(ids: string[]) {
@@ -127,6 +129,11 @@ export class CloudflareD1AiHistoryStore implements AiHistoryStore {
   }
 
   private parseJson(value: string | null) {
-    return value === null ? undefined : (JSON.parse(value) as unknown);
+    if (value === null) return undefined;
+    try {
+      return JSON.parse(value) as unknown;
+    } catch {
+      return undefined;
+    }
   }
 }

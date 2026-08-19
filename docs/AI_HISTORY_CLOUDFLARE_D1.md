@@ -34,7 +34,7 @@ PostgreSQL metadata. D1 has no DynamoDB-style automatic TTL, so the cleanup job
 is required.
 
 On the free plan, D1 currently includes 5 GB total storage, 5 million rows read
-per day and 100,000 rows written per day. Each successful AI request normally
-uses two D1 writes (insert input, update output), making the practical free-plan
-ceiling about 50,000 AI requests per day. Existing PostgreSQL payloads are not
-automatically migrated.
+per day and 100,000 rows written per day. Index maintenance also counts as rows
+written, so do not derive a fixed request ceiling from the two SQL statements;
+monitor **D1 > database > Metrics > Row Metrics** in the dashboard. Existing
+PostgreSQL payloads are not automatically migrated.

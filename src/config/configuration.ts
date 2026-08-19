@@ -129,5 +129,40 @@ export function validateEnvironment(values: Record<string, unknown>) {
     throw new Error(
       'MAIL_FROM is required when MAIL_TRANSPORT is set to resend',
     );
+  requireWhen(
+    values,
+    config.AI_HISTORY_STORAGE_DRIVER === 'cloudflare-d1',
+    [
+      'AI_HISTORY_D1_ACCOUNT_ID',
+      'AI_HISTORY_D1_DATABASE_ID',
+      'AI_HISTORY_D1_API_TOKEN',
+    ],
+    'AI_HISTORY_STORAGE_DRIVER is cloudflare-d1',
+  );
+  requireWhen(
+    values,
+    config.TEMPLATE_STORAGE_DRIVER === 's3',
+    [
+      'TEMPLATE_STORAGE_BUCKET',
+      'TEMPLATE_STORAGE_ENDPOINT',
+      'TEMPLATE_STORAGE_ACCESS_KEY',
+      'TEMPLATE_STORAGE_SECRET_KEY',
+    ],
+    'TEMPLATE_STORAGE_DRIVER is s3',
+  );
   return config;
+}
+
+function requireWhen(
+  values: Record<string, unknown>,
+  condition: boolean,
+  keys: string[],
+  reason: string,
+) {
+  if (!condition) return;
+  const missing = keys.filter(
+    (key) => typeof values[key] !== 'string' || !values[key].trim(),
+  );
+  if (missing.length)
+    throw new Error(`${missing.join(', ')} required when ${reason}`);
 }

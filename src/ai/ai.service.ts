@@ -93,7 +93,7 @@ export class AiService {
         await this.history.create(record.id, userId, input.value);
       } catch (error) {
         this.logger.error(
-          `DynamoDB input write failed for AI request ${record.id}; using PostgreSQL fallback`,
+          `Cloudflare D1 input write failed for AI request ${record.id}; using PostgreSQL fallback`,
           error instanceof Error ? error.stack : undefined,
         );
         await this.prisma.aiRequest.update({
@@ -297,7 +297,7 @@ export class AiService {
         externalStored = true;
       } catch (error) {
         this.logger.error(
-          `DynamoDB output write failed for AI request ${id}; using PostgreSQL fallback`,
+          `Cloudflare D1 output write failed for AI request ${id}; using PostgreSQL fallback`,
           error instanceof Error ? error.stack : undefined,
         );
       }
@@ -352,7 +352,7 @@ export class AiService {
       });
     } catch (error) {
       this.logger.error(
-        'DynamoDB history read failed; returning PostgreSQL fallback fields',
+        'Cloudflare D1 history read failed; returning PostgreSQL fallback fields',
         error instanceof Error ? error.stack : undefined,
       );
       return records;
