@@ -17,6 +17,7 @@ export class HealthController {
   @Public()
   async ready() {
     await this.prisma.$queryRaw`SELECT 1`;
-    return response({ status: 'ok', database: 'connected' });
+    await this.prisma.user.count();
+    return response({ status: 'ok', database: 'connected', authSchema: 'ok' });
   }
 }
