@@ -53,7 +53,10 @@ class Environment {
   @IsInt() @Min(1) AI_CREDIT_INPUT_UNIT_BYTES = 4096;
   @IsInt() @Min(0) AI_CREDIT_INPUT_UNIT_COST = 1;
   @IsInt() @Min(1) AI_CREDIT_OUTPUT_UNIT_BYTES = 4096;
-  @IsInt() @Min(0) AI_CREDIT_OUTPUT_UNIT_COST = 0;
+  @IsIn(['true', 'false']) AI_CREDIT_TOKEN_PRICING_ENABLED = 'false';
+  @IsInt() @Min(0) AI_CREDIT_PER_1K_INPUT_TOKENS = 1;
+  @IsInt() @Min(0) AI_CREDIT_PER_1K_OUTPUT_TOKENS = 2;
+  @IsIn(['true', 'false']) AI_MOCK_PROVIDER_ENABLED = 'true';
   @IsIn(['local', 's3']) TEMPLATE_STORAGE_DRIVER = 'local';
   @IsString() TEMPLATE_STORAGE_LOCAL_PATH = '.data/templates';
   @IsString() TEMPLATE_LIBRARY_TYPE = 'dlanderlib';
@@ -88,6 +91,8 @@ export function validateEnvironment(values: Record<string, unknown>) {
     'AI_CREDIT_INPUT_UNIT_COST',
     'AI_CREDIT_OUTPUT_UNIT_BYTES',
     'AI_CREDIT_OUTPUT_UNIT_COST',
+    'AI_CREDIT_PER_1K_INPUT_TOKENS',
+    'AI_CREDIT_PER_1K_OUTPUT_TOKENS',
     'TEMPLATE_MAX_BUNDLE_BYTES',
     'TEMPLATE_MAX_ITEMS',
     'TEMPLATE_MAX_ELEMENTS_PER_ITEM',

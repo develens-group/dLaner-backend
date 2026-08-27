@@ -27,13 +27,17 @@ $jobs = @(
   @{
     html = Join-Path $root "docs\pdf-sources\wordpress-auth-guide-fa.html"
     name = "Dlander-WordPress-Authentication-FA.pdf"
+  },
+  @{
+    html = Join-Path $root "docs\pdf-sources\platform-ai-credits-guide-fa.html"
+    name = "Dlander-Platform-AI-Credits-FA.pdf"
   }
 )
 
 foreach ($t in $jobs) {
   $outTmp = Join-Path $env:TEMP $t.name
   if (Test-Path $outTmp) { Remove-Item $outTmp -Force }
-  $uri = ([Uri](Resolve-Path $t.html)).AbsoluteUri
+  $uri = ([Uri]::new((Resolve-Path $t.html).Path)).AbsoluteUri
   $p = Start-Process -FilePath $chrome -ArgumentList @(
     "--headless=new", "--disable-gpu", "--no-pdf-header-footer",
     "--print-to-pdf=$outTmp", $uri

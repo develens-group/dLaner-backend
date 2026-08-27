@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { randomUUID } from 'node:crypto';
 import {
   AiExecutionRequest,
@@ -9,6 +10,13 @@ import {
 @Injectable()
 export class MockAiProvider implements AiProvider {
   readonly name = 'mock';
+
+  constructor(private readonly config: ConfigService) {}
+
+  isConfigured() {
+    return this.config.get('AI_MOCK_PROVIDER_ENABLED', 'true') === 'true';
+  }
+
   execute(request: AiExecutionRequest): Promise<AiExecutionResult> {
     if (request.input.simulateFailure === true)
       return Promise.reject(

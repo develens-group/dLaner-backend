@@ -1,0 +1,333 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <title>راهنمای AI پلتفرمی و Credit — Dlander</title>
+  <style>
+    @page { size: A4; margin: 18mm 16mm 20mm; @bottom-center { content: "Dlander — Platform AI & Credits"; font: 9px Tahoma; color: #64748b; } }
+    * { box-sizing: border-box; }
+    body { margin: 0; color: #172033; font: 12px/2 Tahoma, Arial, sans-serif; background: white; }
+    h1,h2,h3 { color: #162b59; margin: 0 0 8px; page-break-after: avoid; }
+    h1 { font-size: 26px; } h2 { font-size: 18px; margin-top: 22px; border-bottom: 2px solid #dbeafe; padding-bottom: 5px; }
+    h3 { font-size: 14px; margin-top: 14px; }
+    p { margin: 5px 0 10px; } ul,ol { margin: 5px 0 12px; padding-right: 24px; }
+    li { margin: 3px 0; }
+    .cover { min-height: 245mm; display: flex; flex-direction: column; justify-content: center; padding: 25mm 12mm; background: linear-gradient(150deg,#eff6ff,#fff 52%,#eef2ff); }
+    .badge { display: inline-block; width: fit-content; background: #1d4ed8; color: #fff; border-radius: 99px; padding: 3px 12px; margin-bottom: 18px; }
+    .subtitle { font-size: 15px; color: #475569; max-width: 560px; }
+    .cover-grid { margin-top: 32px; display: grid; grid-template-columns: repeat(2,1fr); gap: 10px; }
+    .cover-card,.note,.security,.warning { border-radius: 10px; padding: 12px 15px; page-break-inside: avoid; }
+    .cover-card { background: rgba(255,255,255,.8); border: 1px solid #dbeafe; }
+    .note { background: #f8fafc; border-right: 4px solid #3b82f6; margin: 12px 0; }
+    .security { background: #ecfdf5; border: 1px solid #a7f3d0; margin: 12px 0; }
+    .warning { background: #fff7ed; border: 1px solid #fed7aa; margin: 12px 0; }
+    pre { direction: ltr; text-align: left; unicode-bidi: embed; white-space: pre-wrap; word-break: break-word; background: #0f172a; color: #e2e8f0; border-radius: 9px; padding: 12px 14px; font: 10.5px/1.65 Consolas, monospace; page-break-inside: avoid; }
+    code { direction: ltr; unicode-bidi: embed; font-family: Consolas, monospace; background: #eef2ff; color: #3730a3; padding: 1px 4px; border-radius: 4px; }
+    pre code { background: none; color: inherit; padding: 0; }
+    table { width: 100%; border-collapse: collapse; margin: 10px 0 16px; page-break-inside: avoid; }
+    th,td { border: 1px solid #dbe3ef; padding: 7px 9px; text-align: right; }
+    th { background: #eff6ff; color: #1e3a8a; }
+    .page-break { page-break-before: always; }
+    .flow { background: #f1f5f9; border: 1px dashed #94a3b8; border-radius: 10px; padding: 12px 14px; margin: 12px 0; font-size: 11px; line-height: 1.9; }
+  </style>
+</head>
+<body>
+  <section class="cover">
+    <span class="badge">Dlander Backend · Platform AI</span>
+    <h1>راهنمای AI پلتفرمی و Credit</h1>
+    <p class="subtitle">مدل کسب‌وکار: API key روی سرور، کاربر credit می‌خرد، با اپ شما chat می‌زند. شامل تنظیم بک‌اند، APIها، و پیاده‌سازی فرانت React</p>
+    <div class="cover-grid">
+      <div class="cover-card"><b>Providerها</b><br>OpenAI · Anthropic · Gemini</div>
+      <div class="cover-card"><b>صورتحساب</b><br>Credit پلتفرم</div>
+      <div class="cover-card"><b>پرداخت</b><br>Packages + Orders + Webhook</div>
+      <div class="cover-card"><b>فرانت</b><br>Chat + خرید credit</div>
+    </div>
+  </section>
+
+  <main>
+    <h2>۰. مدل پلتفرمی چیست؟</h2>
+    <p>در این مدل، <b>شما</b> API key سرویس‌های AI (OpenAI، Claude، Gemini) را در env سرور قرار می‌دهید. کاربران <b>کلید شخصی وارد نمی‌کنند</b>؛ credit از پلتفرم می‌خرند و هر درخواست AI از موجودی آن‌ها کسر می‌شود.</p>
+    <table>
+      <tr><th>نقش</th><th>مسئولیت</th></tr>
+      <tr><td>مالک پلتفرم (شما)</td><td>API key، قیمت credit، providerها</td></tr>
+      <tr><td>کاربر</td><td>ثبت‌نام، خرید credit، ارسال prompt</td></tr>
+      <tr><td>بک‌اند</td><td>reserve → اجرای AI → capture credit</td></tr>
+      <tr><td>فرانت</td><td>UI chat، نمایش balance، flow خرید</td></tr>
+    </table>
+    <div class="security"><b>امنیت:</b> API key هرگز به فرانت یا کاربر داده نمی‌شود. فقط روی سرور در متغیرهای محیطی نگهداری می‌شود.</div>
+
+    <h2>۱. Providerهای پشتیبانی‌شده</h2>
+    <table>
+      <tr><th>Provider</th><th>شناسه API</th><th>Env</th><th>نمونه مدل</th></tr>
+      <tr><td>OpenAI (GPT)</td><td><code>openai</code></td><td><code>OPENAI_API_KEY</code></td><td>gpt-4o, gpt-4o-mini</td></tr>
+      <tr><td>Anthropic (Claude)</td><td><code>anthropic</code></td><td><code>ANTHROPIC_API_KEY</code></td><td>claude-sonnet-4-20250514</td></tr>
+      <tr><td>Google Gemini</td><td><code>google</code></td><td><code>GOOGLE_AI_API_KEY</code></td><td>gemini-2.0-flash</td></tr>
+      <tr><td>Mock (dev)</td><td><code>mock</code></td><td><code>AI_MOCK_PROVIDER_ENABLED</code></td><td>mock-1</td></tr>
+    </table>
+    <div class="note">فقط providerهایی که env key دارند در <code>GET /api/v1/ai/catalog</code> نمایش داده می‌شوند.</div>
+
+    <h2>۲. تنظیم env سرور</h2>
+    <pre># کلیدهای پلتفرم — فقط روی سرور
+OPENAI_API_KEY=sk-...
+ANTHROPIC_API_KEY=sk-ant-...
+GOOGLE_AI_API_KEY=AIza...
+
+# mock فقط برای توسعه
+AI_MOCK_PROVIDER_ENABLED=true
+AI_PROVIDER_TIMEOUT_MS=30000
+
+# خرید credit
+CREDIT_PURCHASE_ENABLED=true
+MOCK_PAYMENT_ENABLED=true
+PAYMENT_RETURN_URL=http://localhost:5173/credits/payment/success
+PAYMENT_CANCEL_URL=http://localhost:5173/credits/payment/cancel
+
+# قیمت‌گذاری AI
+AI_CREDIT_CHARGING_ENABLED=true
+AI_CREDIT_TOKEN_PRICING_ENABLED=true
+AI_CREDIT_FIXED_COST=1
+AI_CREDIT_PER_1K_INPUT_TOKENS=1
+AI_CREDIT_PER_1K_OUTPUT_TOKENS=2</pre>
+
+    <h2>۳. جریان کامل (End-to-End)</h2>
+    <div class="flow">
+      ۱. کاربر ثبت‌نام / login → accessToken<br>
+      ۲. GET /credits/balance → نمایش موجودی<br>
+      ۳. GET /credits/packages → انتخاب بسته<br>
+      ۴. POST /credits/orders + start-payment → پرداخت → credit اضافه<br>
+      ۵. GET /ai/catalog → انتخاب provider و model<br>
+      ۶. POST /ai/requests → reserve credit → AI → capture → پاسخ
+    </div>
+
+    <h2 class="page-break">۴. API — Credit</h2>
+    <h3>۴.۱ موجودی</h3>
+    <pre>GET /api/v1/credits/balance
+Authorization: Bearer ACCESS_TOKEN</pre>
+    <pre>{
+  "data": {
+    "available": 150,
+    "reserved": 0,
+    "total": 150,
+    "lifetimePurchased": 200,
+    "lifetimeConsumed": 50
+  },
+  "meta": null
+}</pre>
+
+    <h3>۴.۲ خرید credit</h3>
+    <pre>GET  /api/v1/credits/packages
+POST /api/v1/credits/orders
+Idempotency-Key: unique-key
+Content-Type: application/json
+
+{ "packageId": "package-uuid" }
+
+POST /api/v1/credits/orders/:orderId/start-payment
+GET  /api/v1/credits/orders/:orderId</pre>
+    <p>پس از <code>start-payment</code> کاربر به <code>redirectUrl</code> هدایت می‌شود. webhook پرداخت credit را finalize می‌کند.</p>
+
+    <h3>۴.۳ تاریخچه</h3>
+    <pre>GET /api/v1/credits/transactions?limit=25
+GET /api/v1/credits/reservations?limit=25</pre>
+
+    <h2>۵. API — AI</h2>
+    <h3>۵.۱ Catalog (provider و model)</h3>
+    <pre>GET /api/v1/ai/catalog
+Authorization: Bearer ACCESS_TOKEN</pre>
+    <pre>{
+  "data": {
+    "billingMode": "platform_credits",
+    "providers": [
+      {
+        "id": "openai",
+        "name": "OpenAI",
+        "billingMode": "platform_credits",
+        "models": [
+          {
+            "id": "gpt-4o-mini",
+            "label": "GPT-4o Mini",
+            "operations": ["CHAT", "TEXT_GENERATION"]
+          }
+        ]
+      }
+    ]
+  },
+  "meta": null
+}</pre>
+
+    <h3>۵.۲ ارسال prompt (Chat)</h3>
+    <pre>POST /api/v1/ai/requests
+Authorization: Bearer ACCESS_TOKEN
+Idempotency-Key: unique-key-here
+Content-Type: application/json
+
+{
+  "provider": "openai",
+  "model": "gpt-4o-mini",
+  "operation": "CHAT",
+  "input": {
+    "messages": [
+      { "role": "user", "content": "یک توضیح کوتاه بنویس" }
+    ]
+  }
+}</pre>
+    <p>جایگزین: <code>input.prompt</code> و اختیاری <code>input.system</code> برای TEXT_GENERATION.</p>
+    <pre>{
+  "data": {
+    "id": "request-uuid",
+    "status": "COMPLETED",
+    "provider": "openai",
+    "model": "gpt-4o-mini",
+    "outputJson": { "text": "..." },
+    "chargedCreditAmount": 3,
+    "promptTokens": 12,
+    "completionTokens": 45,
+    "latencyMs": 1200
+  },
+  "meta": null
+}</pre>
+
+    <h3>۵.۳ تاریخچه و جزئیات</h3>
+    <pre>GET  /api/v1/ai/requests?limit=25&amp;provider=openai
+GET  /api/v1/ai/requests/:id
+POST /api/v1/ai/requests/:id/cancel</pre>
+
+    <h3>۵.۴ خطاهای رایج</h3>
+    <table>
+      <tr><th>HTTP / پیام</th><th>معنی</th><th>اقدام فرانت</th></tr>
+      <tr><td>422 Insufficient available credits</td><td>credit کافی نیست</td><td>نمایش modal خرید credit</td></tr>
+      <tr><td>400 AI provider request failed</td><td>خطای provider</td><td>پیام خطا + retry</td></tr>
+      <tr><td>404 AI provider is not configured</td><td>provider فعال نیست</td><td>refresh catalog</td></tr>
+      <tr><td>408 / timeout</td><td>provider دیر پاسخ داد</td><td>retry با مدل سبک‌تر</td></tr>
+    </table>
+
+    <h2 class="page-break">۶. پیاده‌سازی Frontend</h2>
+    <h3>۶.۱ ساختار صفحات پیشنهادی</h3>
+    <table>
+      <tr><th>مسیر</th><th>کار</th></tr>
+      <tr><td><code>/login</code>, <code>/register</code></td><td>احراز هویت</td></tr>
+      <tr><td><code>/credits</code></td><td>موجودی + خرید بسته</td></tr>
+      <tr><td><code>/credits/payment/success</code></td><td>بازگشت از درگاه</td></tr>
+      <tr><td><code>/chat</code></td><td>رابط AI</td></tr>
+      <tr><td><code>/chat/history</code></td><td>تاریخچه درخواست‌ها</td></tr>
+    </table>
+
+    <h3>۶.۲ API Client</h3>
+    <pre>const API = 'http://localhost:3000/api/v1';
+
+async function api&lt;T&gt;(path: string, options: RequestInit = {}): Promise&lt;T&gt; {
+  const token = localStorage.getItem('accessToken');
+  const res = await fetch(`${API}${path}`, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...options.headers,
+    },
+  });
+  const body = await res.json();
+  if (!res.ok) throw new Error(body.error?.message ?? 'Request failed');
+  return body.data;
+}</pre>
+
+    <h3>۶.۳ خرید credit</h3>
+    <pre>const balance = await api('/credits/balance');
+const packages = await api('/credits/packages');
+
+const order = await api('/credits/orders', {
+  method: 'POST',
+  headers: { 'Idempotency-Key': crypto.randomUUID() },
+  body: JSON.stringify({ packageId: selectedPackage.id }),
+});
+
+const payment = await api(`/credits/orders/${order.id}/start-payment`, {
+  method: 'POST',
+});
+window.location.href = payment.redirectUrl;</pre>
+
+    <h3>۶.۴ Chat</h3>
+    <pre>const catalog = await api('/ai/catalog');
+const provider = catalog.providers[0];
+const model = provider.models[0].id;
+
+const result = await api('/ai/requests', {
+  method: 'POST',
+  headers: { 'Idempotency-Key': crypto.randomUUID() },
+  body: JSON.stringify({
+    provider: provider.id,
+    model,
+    operation: 'CHAT',
+    input: {
+      messages: [
+        ...history,
+        { role: 'user', content: userMessage },
+      ],
+    },
+  }),
+});
+
+const assistantText = result.outputJson.text;</pre>
+
+    <h3>۶.۵ Componentهای پیشنهادی</h3>
+    <ul>
+      <li><b>CreditBadge</b> — نمایش موجودی در header</li>
+      <li><b>BuyCreditsModal</b> — لیست packages + redirect پرداخت</li>
+      <li><b>ProviderModelSelect</b> — dropdown از catalog</li>
+      <li><b>ChatMessages</b> — لیست user/assistant</li>
+      <li><b>ChatInput</b> — textarea + دکمه ارسال</li>
+      <li><b>InsufficientCreditsBanner</b> — وقتی balance = 0</li>
+    </ul>
+
+    <h2>۷. نکات UX و امنیت فرانت</h2>
+    <ul>
+      <li>قبل از ارسال، <code>available &lt;= 0</code> → disable دکمه Send</li>
+      <li>برای هر درخواست AI یک <code>Idempotency-Key</code> جدید (UUID)</li>
+      <li>درخواست AI sync است؛ loading state ۵–۳۰ ثانیه‌ای طبیعی است</li>
+      <li>API key هرگز در localStorage یا env فرانت نباشد</li>
+      <li>تاریخچه از <code>GET /ai/requests</code> برای sidebar</li>
+    </ul>
+    <div class="warning">Cursor IDE API عمومی برای کاربر ندارد. در این پلتفرم OpenAI، Anthropic و Gemini پشتیبانی می‌شوند.</div>
+
+    <h2 class="page-break">۸. فایل‌های بک‌اند (مرجع توسعه‌دهنده)</h2>
+    <table>
+      <tr><th>مسیر</th><th>توضیح</th></tr>
+      <tr><td><code>src/ai/providers/openai.provider.ts</code></td><td>Provider OpenAI</td></tr>
+      <tr><td><code>src/ai/providers/anthropic.provider.ts</code></td><td>Provider Claude</td></tr>
+      <tr><td><code>src/ai/providers/google.provider.ts</code></td><td>Provider Gemini</td></tr>
+      <tr><td><code>src/ai/ai-catalog.service.ts</code></td><td>Catalog فعال</td></tr>
+      <tr><td><code>src/ai/ai-platform.config.ts</code></td><td>لیست مدل‌ها</td></tr>
+      <tr><td><code>src/credits/*</code></td><td>Credit + commerce</td></tr>
+      <tr><td><code>http/ai.http</code></td><td>نمونه درخواست REST</td></tr>
+    </table>
+
+    <h2>۹. چک‌لیست راه‌اندازی</h2>
+    <ol>
+      <li>API keyها را در env production قرار دهید</li>
+      <li><code>CREDIT_PURCHASE_ENABLED=true</code></li>
+      <li>حداقل یک Credit Package در DB بسازید (admin یا seed)</li>
+      <li>فرانت: login → balance → packages → chat</li>
+      <li>Swagger: <code>/api/docs</code></li>
+      <li>این PDF: <code>/docs/Dlander-Platform-AI-Credits-FA.pdf</code></li>
+    </ol>
+
+    <h2>۱۰. تست سریع با REST Client</h2>
+    <pre># 1. Login → accessToken
+# 2. GET /credits/balance
+# 3. GET /ai/catalog
+# 4. POST /ai/requests (mock یا openai)
+
+# نمونه mock:
+POST /api/v1/ai/requests
+Authorization: Bearer {{accessToken}}
+Idempotency-Key: test-ai-001
+
+{
+  "provider": "mock",
+  "model": "mock-1",
+  "operation": "CHAT",
+  "input": { "prompt": "سلام" }
+}</pre>
+    <p style="margin-top:24px;color:#64748b;font-size:11px;">Dlander Backend · Platform AI & Credits Guide · 2026</p>
+  </main>
+</body>
+</html>

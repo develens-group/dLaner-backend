@@ -55,6 +55,12 @@ export class AppController {
     return this.sendPdf(res, 'Dlander-WordPress-Authentication-FA.pdf');
   }
 
+  @Get('docs/Dlander-Platform-AI-Credits-FA.pdf')
+  @Public()
+  platformAiCreditsGuide(@Res() res: Response) {
+    return this.sendPdf(res, 'Dlander-Platform-AI-Credits-FA.pdf');
+  }
+
   private sendPdf(res: Response, filename: string) {
     const path = this.resolvePdfPath(filename);
     res.set({

@@ -15,7 +15,7 @@ import {
 
 export class CreateAiRequestDto {
   @ApiProperty({
-    example: 'mock',
+    example: 'openai',
     default: 'mock',
     minLength: 1,
     maxLength: 100,
@@ -24,7 +24,7 @@ export class CreateAiRequestDto {
   @Length(1, 100)
   provider = 'mock';
 
-  @ApiProperty({ example: 'mock-text-v1', minLength: 1, maxLength: 100 })
+  @ApiProperty({ example: 'gpt-4o-mini', minLength: 1, maxLength: 100 })
   @IsString()
   @Length(1, 100)
   model!: string;
@@ -35,7 +35,9 @@ export class CreateAiRequestDto {
 
   @ApiProperty({
     type: 'object',
-    example: { prompt: 'Write a short product description.' },
+    example: {
+      messages: [{ role: 'user', content: 'Write a short product description.' }],
+    },
     additionalProperties: true,
   })
   @IsObject()

@@ -1,9 +1,13 @@
 import { Module } from '@nestjs/common';
 import { AdminAiController } from './admin-ai.controller';
+import { AiCatalogService } from './ai-catalog.service';
 import { AiController } from './ai.controller';
 import { AiProviderRegistry } from './ai-provider.registry';
 import { AiService } from './ai.service';
 import { MockAiProvider } from './mock-ai.provider';
+import { AnthropicProvider } from './providers/anthropic.provider';
+import { GoogleProvider } from './providers/google.provider';
+import { OpenAiProvider } from './providers/openai.provider';
 import { CreditsModule } from '../credits/credits.module';
 import { ConfigService } from '@nestjs/config';
 import {
@@ -16,6 +20,10 @@ import {
   controllers: [AiController, AdminAiController],
   providers: [
     MockAiProvider,
+    OpenAiProvider,
+    AnthropicProvider,
+    GoogleProvider,
+    AiCatalogService,
     AiProviderRegistry,
     {
       provide: AI_HISTORY_STORE,

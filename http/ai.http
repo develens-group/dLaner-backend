@@ -1,3 +1,24 @@
+### AI catalog (available providers/models)
+GET {{baseUrl}}/api/v1/ai/catalog
+Authorization: Bearer {{accessToken}}
+
+### Execute OpenAI chat request (platform credits)
+POST {{baseUrl}}/api/v1/ai/requests
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+Idempotency-Key: {{idempotencyKey}}-ai-openai
+
+{
+  "provider": "openai",
+  "model": "gpt-4o-mini",
+  "operation": "CHAT",
+  "input": {
+    "messages": [
+      { "role": "user", "content": "Give a short local test response." }
+    ]
+  }
+}
+
 ### Execute mock AI request
 POST {{baseUrl}}/api/v1/ai/requests
 Authorization: Bearer {{accessToken}}
@@ -37,4 +58,3 @@ Idempotency-Key: {{idempotencyKey}}-ai-failure
   "operation": "CHAT",
   "input": { "simulateFailure": true }
 }
-
