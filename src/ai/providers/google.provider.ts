@@ -35,7 +35,7 @@ export class GoogleProvider implements AiProvider {
   }
 
   async execute(request: AiExecutionRequest): Promise<AiExecutionResult> {
-    const apiKey = this.apiKey();
+    const apiKey = request.apiKey?.trim() || this.apiKey();
     if (!apiKey)
       throw new AiProviderError(
         'PROVIDER_NOT_CONFIGURED',

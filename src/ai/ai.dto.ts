@@ -8,6 +8,7 @@ import {
   IsObject,
   IsOptional,
   IsString,
+  IsUUID,
   Length,
   Max,
   Min,
@@ -42,6 +43,16 @@ export class CreateAiRequestDto {
   })
   @IsObject()
   input!: Record<string, unknown>;
+
+  @ApiPropertyOptional({
+    example: '550e8400-e29b-41d4-a716-446655440000',
+    description:
+      'Optional user-owned API credential. When set, platform credits are not charged.',
+  })
+  @IsOptional()
+  @IsString()
+  @IsUUID()
+  credentialId?: string;
 }
 
 export class AiRequestQueryDto {

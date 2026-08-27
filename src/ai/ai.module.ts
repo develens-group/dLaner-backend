@@ -2,6 +2,8 @@ import { Module } from '@nestjs/common';
 import { AdminAiController } from './admin-ai.controller';
 import { AiCatalogService } from './ai-catalog.service';
 import { AiController } from './ai.controller';
+import { AiCredentialsController } from './ai-credentials.controller';
+import { AiCredentialsService } from './ai-credentials.service';
 import { AiProviderRegistry } from './ai-provider.registry';
 import { AiService } from './ai.service';
 import { MockAiProvider } from './mock-ai.provider';
@@ -17,13 +19,14 @@ import {
 } from './ai-history.store';
 @Module({
   imports: [CreditsModule],
-  controllers: [AiController, AdminAiController],
+  controllers: [AiController, AiCredentialsController, AdminAiController],
   providers: [
     MockAiProvider,
     OpenAiProvider,
     AnthropicProvider,
     GoogleProvider,
     AiCatalogService,
+    AiCredentialsService,
     AiProviderRegistry,
     {
       provide: AI_HISTORY_STORE,

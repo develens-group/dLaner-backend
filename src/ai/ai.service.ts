@@ -8,7 +8,7 @@ import {
   RequestTimeoutException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { AiRequestStatus, Prisma } from '@prisma/client';
+import { AiBillingMode, AiRequestStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   sanitizePayload,
@@ -16,6 +16,7 @@ import {
 } from '../request-tracking/sanitizer';
 import { AiExecutionResult, AiProviderError } from './ai-provider';
 import { AiProviderRegistry } from './ai-provider.registry';
+import { AiCredentialsService } from './ai-credentials.service';
 import { AiRequestQueryDto, CreateAiRequestDto } from './ai.dto';
 import { CreditService } from '../credits/credit.service';
 import { CreditCostCalculator } from '../credits/credit-cost-calculator';
@@ -30,6 +31,7 @@ export class AiService {
     private readonly config: ConfigService,
     private readonly credits: CreditService,
     private readonly costs: CreditCostCalculator,
+    private readonly credentials: AiCredentialsService,
     @Inject(AI_HISTORY_STORE) private readonly history: AiHistoryStore,
   ) {}
   async createAndExecute(
@@ -53,7 +55,18 @@ export class AiService {
         return (await this.hydrate([existing]))[0];
       }
     }
+    const resolved = dto.credentialId
+      ? await this.credentials.resolveForRequest(
+          userId,
+          dto.credentialId,
+          dto.provider,
+        )
+      : undefined;
+    const billingMode = resolved
+      ? AiBillingMode.USER_KEY
+      : AiBillingMode.PLATFORM_CREDITS;
     const chargingEnabled =
+      billingMode === AiBillingMode.PLATFORM_CREDITS &&
       this.config.get('AI_CREDIT_CHARGING_ENABLED', 'true') === 'true';
     const estimatedCreditCost = chargingEnabled ? this.costs.estimate(dto) : 0;
     const operationKey = key ?? `ai:${inputHash}`;
@@ -71,6 +84,8 @@ export class AiService {
       data: {
         userId,
         requestId,
+        credentialId: resolved?.credential.id,
+        billingMode,
         idempotencyKey: key,
         provider: dto.provider.toLowerCase(),
         model: dto.model,
@@ -113,8 +128,11 @@ export class AiService {
           model: dto.model,
           operation: dto.operation,
           input: dto.input,
+          apiKey: resolved?.apiKey,
         }),
       );
+      if (resolved)
+        await this.credentials.markUsed(resolved.credential.id).catch(() => undefined);
       const actualCreditCost = chargingEnabled
         ? this.costs.actual(dto, result)
         : 0;
@@ -149,6 +167,12 @@ export class AiService {
         actualCreditCost,
       );
     } catch (error) {
+      if (resolved) {
+        const normalized = normalizeError(error);
+        await this.credentials
+          .markUsed(resolved.credential.id, normalized.message)
+          .catch(() => undefined);
+      }
       if (
         reservation &&
         !(
@@ -387,6 +411,8 @@ export const safeAiSelect = {
   id: true,
   requestId: true,
   userId: true,
+  credentialId: true,
+  billingMode: true,
   provider: true,
   model: true,
   operation: true,

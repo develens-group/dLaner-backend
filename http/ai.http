@@ -1,8 +1,24 @@
-### AI catalog (available providers/models)
+### AI catalog (platform + user key modes)
 GET {{baseUrl}}/api/v1/ai/catalog
 Authorization: Bearer {{accessToken}}
 
-### Execute OpenAI chat request (platform credits)
+### List user AI credentials (BYOK)
+GET {{baseUrl}}/api/v1/ai/credentials
+Authorization: Bearer {{accessToken}}
+
+### Connect personal OpenAI key (no platform credits charged when used)
+POST {{baseUrl}}/api/v1/ai/credentials
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "provider": "openai",
+  "apiKey": "sk-your-personal-key",
+  "label": "Personal OpenAI",
+  "isDefault": true
+}
+
+### Execute with platform credits
 POST {{baseUrl}}/api/v1/ai/requests
 Authorization: Bearer {{accessToken}}
 Content-Type: application/json
@@ -12,6 +28,24 @@ Idempotency-Key: {{idempotencyKey}}-ai-openai
   "provider": "openai",
   "model": "gpt-4o-mini",
   "operation": "CHAT",
+  "input": {
+    "messages": [
+      { "role": "user", "content": "Give a short local test response." }
+    ]
+  }
+}
+
+### Execute with user key (BYOK — no credit charge)
+POST {{baseUrl}}/api/v1/ai/requests
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+Idempotency-Key: {{idempotencyKey}}-ai-byok
+
+{
+  "provider": "openai",
+  "model": "gpt-4o-mini",
+  "operation": "CHAT",
+  "credentialId": "{{credentialId}}",
   "input": {
     "messages": [
       { "role": "user", "content": "Give a short local test response." }
@@ -44,6 +78,10 @@ Authorization: Bearer {{accessToken}}
 
 ### Cancel a queued request
 POST {{baseUrl}}/api/v1/ai/requests/{{aiRequestId}}/cancel
+Authorization: Bearer {{accessToken}}
+
+### Delete credential
+DELETE {{baseUrl}}/api/v1/ai/credentials/{{credentialId}}
 Authorization: Bearer {{accessToken}}
 
 ### Common error: mock provider failure

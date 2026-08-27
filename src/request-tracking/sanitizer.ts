@@ -118,7 +118,11 @@ export function sanitizeHttpBody(
       captured.value = { omitted: true, reason: 'maximum size exceeded' };
     return captured;
   }
-  if (route.startsWith('/api/v1/auth/') || route === '/api/v1/ai/requests')
+  if (
+    route.startsWith('/api/v1/auth/') ||
+    route === '/api/v1/ai/requests' ||
+    route.startsWith('/api/v1/ai/credentials')
+  )
     return { value: null, captured: false, truncated: false, redacted: true };
   return { value: null, captured: false, truncated: false, redacted: false };
 }

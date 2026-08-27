@@ -27,8 +27,8 @@ export class AiController {
     private readonly catalog: AiCatalogService,
   ) {}
   @Get('catalog')
-  catalogList() {
-    return response(this.catalog.list());
+  async catalogList(@CurrentUser() user: AccessPrincipal) {
+    return response(await this.catalog.list(user.userId));
   }
   @Post('requests') async create(
     @CurrentUser() user: AccessPrincipal,

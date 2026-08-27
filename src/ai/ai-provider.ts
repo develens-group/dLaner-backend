@@ -3,6 +3,7 @@ export interface AiExecutionRequest {
   model: string;
   operation: AiOperation;
   input: Record<string, unknown>;
+  apiKey?: string;
 }
 export interface AiUsage {
   promptTokens?: number;

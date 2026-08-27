@@ -15,10 +15,11 @@ export class AiProviderRegistry {
     anthropic: AnthropicProvider,
     google: GoogleProvider,
   ) {
-    for (const provider of [mock, openai, anthropic, google]) {
-      if ('isConfigured' in provider && !provider.isConfigured()) continue;
+    // Real providers stay registered for BYOK even without platform keys.
+    for (const provider of [openai, anthropic, google]) {
       this.providers.set(provider.name, provider);
     }
+    if (mock.isConfigured()) this.providers.set(mock.name, mock);
   }
 
   get(name: string) {

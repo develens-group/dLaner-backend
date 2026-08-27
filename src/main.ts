@@ -16,6 +16,8 @@ async function bootstrap() {
   const config = app.get(ConfigService);
   setupApplication(app);
   app.enableShutdownHooks();
-  await app.listen(config.get<number>('PORT', 3000), '0.0.0.0');
+  const port = config.get<number>('PORT', 3000);
+  await app.listen(port, '0.0.0.0');
+  console.log(`Dlander API listening on http://localhost:${port}`);
 }
 void bootstrap();

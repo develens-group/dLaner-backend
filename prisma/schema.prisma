@@ -105,6 +105,17 @@ enum AiOperation {
   CUSTOM
 }
 
+enum AiCredentialStatus {
+  ACTIVE
+  INVALID
+  REVOKED
+}
+
+enum AiBillingMode {
+  PLATFORM_CREDITS
+  USER_KEY
+}
+
 enum CreditLedgerType {
   PURCHASE
   ADMIN_GRANT
@@ -165,6 +176,7 @@ model User {
   passwordResetTokens PasswordResetToken[]
   apiRequests         ApiRequestRecord[]
   aiRequests          AiRequest[]
+  aiCredentials       UserAiCredential[]
   auditLogs           AuditLog[]               @relation("AuditActor")
   creditAccount       CreditAccount?
   creditLedger        CreditLedgerEntry[]      @relation("LedgerOwner")
@@ -383,6 +395,8 @@ model AiRequest {
   id                  String             @id @default(uuid()) @db.Uuid
   requestId           String?            @db.VarChar(128)
   userId              String             @db.Uuid
+  credentialId        String?            @db.Uuid
+  billingMode         AiBillingMode      @default(PLATFORM_CREDITS)
   idempotencyKey      String?            @db.VarChar(128)
   provider            String             @db.VarChar(100)
   model               String             @db.VarChar(100)
@@ -414,6 +428,7 @@ model AiRequest {
   createdAt           DateTime           @default(now())
   updatedAt           DateTime           @updatedAt
   user                User               @relation(fields: [userId], references: [id], onDelete: Restrict)
+  credential          UserAiCredential?  @relation(fields: [credentialId], references: [id], onDelete: SetNull)
   creditReservation   CreditReservation? @relation(fields: [creditReservationId], references: [id], onDelete: SetNull)
 
   @@unique([userId, idempotencyKey])
@@ -422,6 +437,27 @@ model AiRequest {
   @@index([provider, model, createdAt])
   @@index([requestId])
   @@index([creditReservationId])
+  @@index([credentialId])
+}
+
+model UserAiCredential {
+  id           String             @id @default(uuid()) @db.Uuid
+  userId       String             @db.Uuid
+  provider     String             @db.VarChar(100)
+  label        String?            @db.VarChar(100)
+  apiKeyEnc    String
+  keyHint      String             @db.VarChar(32)
+  isDefault    Boolean            @default(false)
+  status       AiCredentialStatus @default(ACTIVE)
+  lastUsedAt   DateTime?
+  lastError    String?            @db.VarChar(500)
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+  user         User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  aiRequests   AiRequest[]
+
+  @@index([userId, provider])
+  @@index([userId, isDefault])
 }
 
 model CreditAccount {

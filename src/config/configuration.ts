@@ -57,6 +57,7 @@ class Environment {
   @IsInt() @Min(0) AI_CREDIT_PER_1K_INPUT_TOKENS = 1;
   @IsInt() @Min(0) AI_CREDIT_PER_1K_OUTPUT_TOKENS = 2;
   @IsIn(['true', 'false']) AI_MOCK_PROVIDER_ENABLED = 'true';
+  @IsString() AI_CREDENTIALS_ENCRYPTION_KEY = '';
   @IsIn(['local', 's3']) TEMPLATE_STORAGE_DRIVER = 'local';
   @IsString() TEMPLATE_STORAGE_LOCAL_PATH = '.data/templates';
   @IsString() TEMPLATE_LIBRARY_TYPE = 'dlanderlib';
@@ -119,6 +120,13 @@ export function validateEnvironment(values: Record<string, unknown>) {
   if (config.PAYMENT_WEBHOOK_SECRET.length < 32)
     throw new Error(
       'PAYMENT_WEBHOOK_SECRET must contain at least 32 characters',
+    );
+  if (
+    config.AI_CREDENTIALS_ENCRYPTION_KEY &&
+    !/^[0-9a-fA-F]{64}$/.test(config.AI_CREDENTIALS_ENCRYPTION_KEY)
+  )
+    throw new Error(
+      'AI_CREDENTIALS_ENCRYPTION_KEY must be empty or a 64-character hex string',
     );
   if (
     config.MAIL_TRANSPORT === 'resend' &&
