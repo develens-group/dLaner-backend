@@ -20,8 +20,10 @@ import {
   AdminResetPasswordDto,
   ChangeUserPlanDto,
   ChangeUserRoleDto,
+  UserActivityQueryDto,
   UserQueryDto,
 } from './admin.dto';
+import { AdminActivityService } from './admin-activity.service';
 import { AdminService } from './admin.service';
 
 @ApiTags('admin')
@@ -29,7 +31,10 @@ import { AdminService } from './admin.service';
 @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
 @Controller('api/v1/admin/users')
 export class AdminController {
-  constructor(private readonly admin: AdminService) {}
+  constructor(
+    private readonly admin: AdminService,
+    private readonly activity: AdminActivityService,
+  ) {}
   @Get() async list(@Query() query: UserQueryDto) {
     const result = await this.admin.list(query);
     return response(result.items, result.meta);
@@ -40,6 +45,14 @@ export class AdminController {
     @Body() dto: AdminCreateUserDto,
   ) {
     return response(await this.admin.create(actor, dto));
+  }
+  @Get(':userId/activity')
+  async userActivity(
+    @Param('userId', ParseUUIDPipe) id: string,
+    @Query() query: UserActivityQueryDto,
+  ) {
+    const result = await this.activity.list(id, query);
+    return response(result.items, result.meta);
   }
   @Get(':userId') async get(@Param('userId', ParseUUIDPipe) id: string) {
     return response(await this.admin.get(id));

@@ -2,6 +2,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { UserPlan, UserRole, UserStatus } from '@prisma/client';
 import { Transform, Type } from 'class-transformer';
 import {
+  IsArray,
   IsEmail,
   IsEnum,
   IsIn,
@@ -125,6 +126,49 @@ export class UserQueryDto {
   @IsOptional()
   @IsEnum(UserPlan)
   plan?: UserPlan;
+}
+
+export const ACTIVITY_TYPES = [
+  'audit',
+  'credit',
+  'api_request',
+  'ai_request',
+  'session',
+] as const;
+export type ActivityType = (typeof ACTIVITY_TYPES)[number];
+
+export class UserActivityQueryDto {
+  @ApiPropertyOptional({ example: 30, default: 30, minimum: 1, maximum: 100 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  limit = 30;
+
+  @ApiPropertyOptional({ description: 'Opaque cursor from previous page' })
+  @IsOptional()
+  @IsString()
+  cursor?: string;
+
+  @ApiPropertyOptional({
+    isArray: true,
+    enum: ACTIVITY_TYPES,
+    description: 'Repeatable ?types=audit&types=credit or comma-separated',
+  })
+  @IsOptional()
+  @Transform(({ value }: { value: unknown }) => {
+    if (Array.isArray(value)) return value;
+    if (typeof value === 'string')
+      return value
+        .split(',')
+        .map((v) => v.trim())
+        .filter(Boolean);
+    return value;
+  })
+  @IsArray()
+  @IsIn(ACTIVITY_TYPES, { each: true })
+  types?: ActivityType[];
 }
 
 export class DashboardQueryDto {
