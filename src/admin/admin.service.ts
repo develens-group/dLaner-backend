@@ -1,12 +1,15 @@
 import {
+  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma, UserPlan, UserRole, UserStatus } from '@prisma/client';
 import { ConfigService } from '@nestjs/config';
+import * as argon2 from 'argon2';
 import { AuditService } from '../audit/audit.service';
 import { AccessPrincipal } from '../common/auth.types';
+import { normalizeEmail } from '../common/security';
 import { CreditService } from '../credits/credit.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { UserQueryDto } from './admin.dto';
@@ -140,6 +143,57 @@ export class AdminService {
       plan,
     });
     return user;
+  }
+  async create(
+    actor: AccessPrincipal,
+    dto: {
+      email: string;
+      password: string;
+      displayName?: string;
+      role: UserRole;
+      plan?: UserPlan;
+    },
+  ) {
+    this.assertCanAssignRole(actor, dto.role);
+    const email = normalizeEmail(dto.email);
+    const existing = await this.prisma.user.findUnique({ where: { email } });
+    if (existing) throw new ConflictException('Unable to create account');
+    const passwordHash = await argon2.hash(dto.password, {
+      type: argon2.argon2id,
+    });
+    const user = await this.prisma.user.create({
+      data: {
+        email,
+        passwordHash,
+        displayName: dto.displayName?.trim(),
+        role: dto.role,
+        plan: dto.plan ?? UserPlan.FREE,
+        status: UserStatus.ACTIVE,
+        emailVerifiedAt: new Date(),
+      },
+      select,
+    });
+    const account = await this.credits.getOrCreateAccount(user.id);
+    this.audit.record('admin.user.created', actor.userId, user.id, 'User', {
+      role: user.role,
+      plan: user.plan,
+    });
+    return {
+      ...user,
+      creditAccount: {
+        availableBalance: account.availableBalance,
+        reservedBalance: account.reservedBalance,
+        lifetimePurchased: account.lifetimePurchased,
+        lifetimeConsumed: account.lifetimeConsumed,
+      },
+    };
+  }
+  private assertCanAssignRole(actor: AccessPrincipal, role: UserRole) {
+    if (actor.role === UserRole.SUPER_ADMIN) return;
+    if (role === UserRole.USER || role === UserRole.REVIEWER) return;
+    throw new ForbiddenException(
+      'Only a super administrator can assign administrator roles',
+    );
   }
   private async assertCanAlter(actor: AccessPrincipal, id: string) {
     const target = await this.prisma.user.findUnique({ where: { id } });

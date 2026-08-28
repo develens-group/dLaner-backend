@@ -91,3 +91,93 @@ describe('AdminService list/get', () => {
     );
   });
 });
+
+describe('AdminService create', () => {
+  const actorAdmin = { userId: 'admin1', role: UserRole.ADMIN } as const;
+  const actorSuper = { userId: 'super1', role: UserRole.SUPER_ADMIN } as const;
+
+  function build(
+    prisma: object,
+    credits = {
+      getOrCreateAccount: jest.fn().mockResolvedValue({
+        availableBalance: 0,
+        reservedBalance: 0,
+        lifetimePurchased: 0,
+        lifetimeConsumed: 0,
+      }),
+    },
+  ) {
+    return new AdminService(
+      prisma as never,
+      { record: jest.fn() } as never,
+      { get: jest.fn() } as never,
+      credits as never,
+    );
+  }
+
+  it('forbids ADMIN creating ADMIN', async () => {
+    const service = build({
+      user: { findUnique: jest.fn().mockResolvedValue(null) },
+    });
+    await expect(
+      service.create(actorAdmin as never, {
+        email: 'x@y.com',
+        password: 'StrongPass123',
+        role: UserRole.ADMIN,
+      }),
+    ).rejects.toThrow(/Forbidden|role/i);
+  });
+
+  it('creates USER as ACTIVE with verified email and credit account', async () => {
+    const created = {
+      id: 'new1',
+      email: 'x@y.com',
+      displayName: 'X',
+      role: UserRole.USER,
+      plan: UserPlan.FREE,
+      status: UserStatus.ACTIVE,
+      emailVerifiedAt: new Date(),
+      lastLoginAt: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      deletedAt: null,
+    };
+    const create = jest.fn().mockResolvedValue(created);
+    const service = build({
+      user: {
+        findUnique: jest.fn().mockResolvedValue(null),
+        create,
+      },
+    });
+    const result = await service.create(actorAdmin as never, {
+      email: 'X@Y.com',
+      password: 'StrongPass123',
+      role: UserRole.USER,
+      displayName: 'X',
+    });
+    expect(create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          email: 'x@y.com',
+          role: UserRole.USER,
+          status: UserStatus.ACTIVE,
+          plan: UserPlan.FREE,
+        }),
+      }),
+    );
+    expect(result.creditAccount.availableBalance).toBe(0);
+  });
+
+  it('conflicts on duplicate email', async () => {
+    const service = build({
+      user: { findUnique: jest.fn().mockResolvedValue({ id: 'exists' }) },
+    });
+    await expect(
+      service.create(actorSuper as never, {
+        email: 'x@y.com',
+        password: 'StrongPass123',
+        role: UserRole.USER,
+      }),
+    ).rejects.toThrow(/Conflict|Unable|exists/i);
+  });
+});

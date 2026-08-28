@@ -15,7 +15,11 @@ import { UserRole } from '@prisma/client';
 import { response } from '../common/api-response';
 import type { AccessPrincipal } from '../common/auth.types';
 import { CurrentUser, Roles } from '../common/decorators';
-import { ChangeUserPlanDto, UserQueryDto } from './admin.dto';
+import {
+  AdminCreateUserDto,
+  ChangeUserPlanDto,
+  UserQueryDto,
+} from './admin.dto';
 import { AdminService } from './admin.service';
 
 @ApiTags('admin')
@@ -27,6 +31,13 @@ export class AdminController {
   @Get() async list(@Query() query: UserQueryDto) {
     const result = await this.admin.list(query);
     return response(result.items, result.meta);
+  }
+  @Post()
+  async create(
+    @CurrentUser() actor: AccessPrincipal,
+    @Body() dto: AdminCreateUserDto,
+  ) {
+    return response(await this.admin.create(actor, dto));
   }
   @Get(':userId') async get(@Param('userId', ParseUUIDPipe) id: string) {
     return response(await this.admin.get(id));
