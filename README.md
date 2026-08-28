@@ -135,6 +135,8 @@ Set it to `cookie` in production. The API places the token in a `Secure`, `HttpO
 
 `ADMIN` and `SUPER_ADMIN` may search/page through `/api/v1/admin/users`, inspect a user, and block/unblock accounts. `ADMIN` cannot modify `SUPER_ADMIN`; administrators cannot block themselves. Block revokes sessions. Administrative mutations call the audit abstraction and currently emit structured audit log events.
 
+Admin panel API contract: [`docs/ADMIN_PANEL_API.md`](docs/ADMIN_PANEL_API.md)
+
 ## Development email
 
 The mail abstraction sends through SMTP. Start Mailpit on ports 1025 (SMTP) and 8025 (web UI), retain the `.env.example` SMTP defaults, and view messages at `http://localhost:8025`. Production should supply authenticated TLS SMTP configuration.
