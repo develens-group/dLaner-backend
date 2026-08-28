@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { UserPlan } from '@prisma/client';
+import { UserPlan, UserRole, UserStatus } from '@prisma/client';
 import { Transform, Type } from 'class-transformer';
 import {
   IsEnum,
@@ -46,6 +46,21 @@ export class UserQueryDto {
   )
   @IsString()
   search?: string;
+
+  @ApiPropertyOptional({ enum: UserRole })
+  @IsOptional()
+  @IsEnum(UserRole)
+  role?: UserRole;
+
+  @ApiPropertyOptional({ enum: UserStatus })
+  @IsOptional()
+  @IsEnum(UserStatus)
+  status?: UserStatus;
+
+  @ApiPropertyOptional({ enum: UserPlan })
+  @IsOptional()
+  @IsEnum(UserPlan)
+  plan?: UserPlan;
 }
 
 export class DashboardQueryDto {

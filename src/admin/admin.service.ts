@@ -3,10 +3,11 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { UserPlan, UserRole, UserStatus } from '@prisma/client';
+import { Prisma, UserPlan, UserRole, UserStatus } from '@prisma/client';
 import { ConfigService } from '@nestjs/config';
 import { AuditService } from '../audit/audit.service';
 import { AccessPrincipal } from '../common/auth.types';
+import { CreditService } from '../credits/credit.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { UserQueryDto } from './admin.dto';
 
@@ -30,26 +31,32 @@ export class AdminService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     private readonly config: ConfigService,
+    private readonly credits: CreditService,
   ) {}
   async list(query: UserQueryDto) {
-    const where = query.search
-      ? {
-          OR: [
-            {
-              email: {
-                contains: query.search.toLowerCase(),
-                mode: 'insensitive' as const,
+    const where: Prisma.UserWhereInput = {
+      ...(query.role ? { role: query.role } : {}),
+      ...(query.status ? { status: query.status } : {}),
+      ...(query.plan ? { plan: query.plan } : {}),
+      ...(query.search
+        ? {
+            OR: [
+              {
+                email: {
+                  contains: query.search.toLowerCase(),
+                  mode: 'insensitive' as const,
+                },
               },
-            },
-            {
-              displayName: {
-                contains: query.search,
-                mode: 'insensitive' as const,
+              {
+                displayName: {
+                  contains: query.search,
+                  mode: 'insensitive' as const,
+                },
               },
-            },
-          ],
-        }
-      : {};
+            ],
+          }
+        : {}),
+    };
     const [items, total] = await this.prisma.$transaction([
       this.prisma.user.findMany({
         where,
@@ -73,7 +80,16 @@ export class AdminService {
   async get(id: string) {
     const user = await this.prisma.user.findUnique({ where: { id }, select });
     if (!user) throw new NotFoundException('User not found');
-    return user;
+    const account = await this.credits.getOrCreateAccount(id);
+    return {
+      ...user,
+      creditAccount: {
+        availableBalance: account.availableBalance,
+        reservedBalance: account.reservedBalance,
+        lifetimePurchased: account.lifetimePurchased,
+        lifetimeConsumed: account.lifetimeConsumed,
+      },
+    };
   }
   async block(actor: AccessPrincipal, id: string) {
     await this.assertCanAlter(actor, id);
