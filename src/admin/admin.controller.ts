@@ -17,7 +17,9 @@ import type { AccessPrincipal } from '../common/auth.types';
 import { CurrentUser, Roles } from '../common/decorators';
 import {
   AdminCreateUserDto,
+  AdminResetPasswordDto,
   ChangeUserPlanDto,
+  ChangeUserRoleDto,
   UserQueryDto,
 } from './admin.dto';
 import { AdminService } from './admin.service';
@@ -65,5 +67,25 @@ export class AdminController {
     @Body() dto: ChangeUserPlanDto,
   ) {
     return response(await this.admin.changePlan(actor, id, dto.plan));
+  }
+  @Post(':userId/reset-password')
+  @HttpCode(HttpStatus.OK)
+  async resetPassword(
+    @CurrentUser() actor: AccessPrincipal,
+    @Param('userId', ParseUUIDPipe) id: string,
+    @Body() dto: AdminResetPasswordDto,
+  ) {
+    return response(
+      await this.admin.resetPassword(actor, id, dto.newPassword),
+    );
+  }
+  @Patch(':userId/role')
+  @Roles(UserRole.SUPER_ADMIN)
+  async changeRole(
+    @CurrentUser() actor: AccessPrincipal,
+    @Param('userId', ParseUUIDPipe) id: string,
+    @Body() dto: ChangeUserRoleDto,
+  ) {
+    return response(await this.admin.changeRole(actor, id, dto.role));
   }
 }

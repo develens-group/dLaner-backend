@@ -54,6 +54,27 @@ export class AdminCreateUserDto {
   plan?: UserPlan;
 }
 
+export class AdminResetPasswordDto {
+  @ApiProperty({
+    example: 'StrongPass123',
+    minLength: 10,
+    maxLength: 128,
+  })
+  @IsString()
+  @Length(10, 128)
+  @Matches(PASSWORD_PATTERN, {
+    message:
+      'password must contain uppercase, lowercase, and numeric characters',
+  })
+  newPassword!: string;
+}
+
+export class ChangeUserRoleDto {
+  @ApiProperty({ enum: UserRole })
+  @IsEnum(UserRole)
+  role!: UserRole;
+}
+
 export class ChangeUserPlanDto {
   @ApiProperty({ enum: UserPlan, example: UserPlan.PRO })
   @IsEnum(UserPlan)

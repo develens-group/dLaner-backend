@@ -188,6 +188,48 @@ export class AdminService {
       },
     };
   }
+  async resetPassword(
+    actor: AccessPrincipal,
+    id: string,
+    newPassword: string,
+  ) {
+    await this.assertCanAlter(actor, id);
+    const passwordHash = await argon2.hash(newPassword, {
+      type: argon2.argon2id,
+    });
+    const user = await this.prisma.$transaction(async (tx) => {
+      const updated = await tx.user.update({
+        where: { id },
+        data: { passwordHash },
+        select,
+      });
+      await tx.session.updateMany({
+        where: { userId: id, revokedAt: null },
+        data: { revokedAt: new Date() },
+      });
+      return updated;
+    });
+    this.audit.record('admin.user.reset_password', actor.userId, id, 'User');
+    return { id: user.id, message: 'Password reset successfully' };
+  }
+  async changeRole(actor: AccessPrincipal, id: string, role: UserRole) {
+    if (actor.role !== UserRole.SUPER_ADMIN) {
+      throw new ForbiddenException(
+        'Only a super administrator can change roles',
+      );
+    }
+    await this.assertCanAlter(actor, id);
+    this.assertCanAssignRole(actor, role);
+    const user = await this.prisma.user.update({
+      where: { id },
+      data: { role },
+      select,
+    });
+    this.audit.record('admin.user.role_changed', actor.userId, id, 'User', {
+      role,
+    });
+    return user;
+  }
   private assertCanAssignRole(actor: AccessPrincipal, role: UserRole) {
     if (actor.role === UserRole.SUPER_ADMIN) return;
     if (role === UserRole.USER || role === UserRole.REVIEWER) return;

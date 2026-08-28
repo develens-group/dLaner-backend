@@ -1,4 +1,4 @@
-import { NotFoundException } from '@nestjs/common';
+import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import { UserPlan, UserRole, UserStatus } from '@prisma/client';
 import { AdminService } from './admin.service';
 
@@ -179,5 +179,119 @@ describe('AdminService create', () => {
         role: UserRole.USER,
       }),
     ).rejects.toThrow(/Conflict|Unable|exists/i);
+  });
+});
+
+describe('AdminService resetPassword/changeRole', () => {
+  const selectUser = {
+    id: 'u2',
+    email: 't@t.com',
+    displayName: null,
+    role: UserRole.USER,
+    plan: UserPlan.FREE,
+    status: UserStatus.ACTIVE,
+    emailVerifiedAt: new Date(),
+    lastLoginAt: null,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    deletedAt: null,
+  };
+
+  it('resetPassword updates hash and revokes sessions', async () => {
+    const audit = { record: jest.fn() };
+    const update = jest.fn().mockResolvedValue(selectUser);
+    const updateMany = jest.fn().mockResolvedValue({ count: 2 });
+    const prisma = {
+      user: {
+        findUnique: jest.fn().mockResolvedValue(selectUser),
+        update,
+      },
+      session: { updateMany },
+      $transaction: jest.fn(async (fn: (tx: unknown) => Promise<unknown>) =>
+        fn({ user: { update }, session: { updateMany } }),
+      ),
+    };
+    const service = new AdminService(
+      prisma as never,
+      audit as never,
+      { get: jest.fn() } as never,
+      { getOrCreateAccount: jest.fn() } as never,
+    );
+    await service.resetPassword(
+      { userId: 'admin1', role: UserRole.ADMIN } as never,
+      'u2',
+      'NewStrongPass1',
+    );
+    expect(update).toHaveBeenCalled();
+    expect(updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { userId: 'u2', revokedAt: null },
+      }),
+    );
+    expect(audit.record).toHaveBeenCalledWith(
+      'admin.user.reset_password',
+      'admin1',
+      'u2',
+      'User',
+    );
+  });
+
+  it('changeRole requires SUPER_ADMIN actor in service policy', async () => {
+    const prisma = {
+      user: {
+        findUnique: jest.fn().mockResolvedValue(selectUser),
+        update: jest.fn(),
+      },
+    };
+    const service = new AdminService(
+      prisma as never,
+      { record: jest.fn() } as never,
+      { get: jest.fn() } as never,
+      { getOrCreateAccount: jest.fn() } as never,
+    );
+    await expect(
+      service.changeRole(
+        { userId: 'admin1', role: UserRole.ADMIN } as never,
+        'u2',
+        UserRole.REVIEWER,
+      ),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
+  it('changeRole updates role for SUPER_ADMIN', async () => {
+    const update = jest.fn().mockResolvedValue({
+      ...selectUser,
+      role: UserRole.REVIEWER,
+    });
+    const prisma = {
+      user: {
+        findUnique: jest.fn().mockResolvedValue(selectUser),
+        update,
+      },
+    };
+    const audit = { record: jest.fn() };
+    const service = new AdminService(
+      prisma as never,
+      audit as never,
+      { get: jest.fn() } as never,
+      { getOrCreateAccount: jest.fn() } as never,
+    );
+    await service.changeRole(
+      { userId: 'super1', role: UserRole.SUPER_ADMIN } as never,
+      'u2',
+      UserRole.REVIEWER,
+    );
+    expect(update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: { role: UserRole.REVIEWER },
+      }),
+    );
+    expect(audit.record).toHaveBeenCalledWith(
+      'admin.user.role_changed',
+      'super1',
+      'u2',
+      'User',
+      { role: UserRole.REVIEWER },
+    );
   });
 });
