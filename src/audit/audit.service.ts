@@ -33,4 +33,48 @@ export class AuditService {
         ),
       );
   }
+
+  async list(query: {
+    page: number;
+    limit: number;
+    action?: string;
+    actorId?: string;
+    targetType?: string;
+    targetId?: string;
+    from?: string;
+    to?: string;
+  }) {
+    const where: Prisma.AuditLogWhereInput = {
+      ...(query.action ? { action: query.action } : {}),
+      ...(query.actorId ? { actorId: query.actorId } : {}),
+      ...(query.targetType ? { targetType: query.targetType } : {}),
+      ...(query.targetId ? { targetId: query.targetId } : {}),
+      ...(query.from || query.to
+        ? {
+            createdAt: {
+              ...(query.from ? { gte: new Date(query.from) } : {}),
+              ...(query.to ? { lte: new Date(query.to) } : {}),
+            },
+          }
+        : {}),
+    };
+    const [items, total] = await this.prisma.$transaction([
+      this.prisma.auditLog.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip: (query.page - 1) * query.limit,
+        take: query.limit,
+      }),
+      this.prisma.auditLog.count({ where }),
+    ]);
+    return {
+      items,
+      meta: {
+        page: query.page,
+        limit: query.limit,
+        total,
+        pages: Math.ceil(total / query.limit) || 0,
+      },
+    };
+  }
 }
