@@ -25,7 +25,8 @@
     "test:e2e:cov": "npm run test:db:reset && jest --config ./test/jest-e2e.json --coverage --runInBand",
     "test:db:reset": "node scripts/test-db-reset.cjs",
     "retention:cleanup": "ts-node src/maintenance/retention.ts",
-    "templates:import": "ts-node scripts/import-templates.ts"
+    "templates:import": "ts-node scripts/import-templates.ts",
+    "bootstrap:super-admin": "node scripts/bootstrap-super-admin.cjs"
   },
   "engines": {
     "node": "22.x"
