@@ -106,7 +106,7 @@ export class FakeAiService {
         if (input.image) this.assertImage(input.image);
         continue;
       }
-      const raw = (input as Record<string, unknown>)[field.name];
+      const raw = (input as unknown as Record<string, unknown>)[field.name];
       if (field.required && (raw === undefined || raw === null || raw === ''))
         throw new BadRequestException(`${field.name} is required`);
       if (raw === undefined || raw === null || raw === '') continue;

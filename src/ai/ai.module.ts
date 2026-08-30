@@ -1,25 +1,33 @@
 import { Module } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { CreditsModule } from '../credits/credits.module';
 import { AdminAiController } from './admin-ai.controller';
 import { AiCatalogService } from './ai-catalog.service';
-import { AiController } from './ai.controller';
 import { AiCredentialsController } from './ai-credentials.controller';
 import { AiCredentialsService } from './ai-credentials.service';
-import { AiProviderRegistry } from './ai-provider.registry';
-import { AiService } from './ai.service';
-import { MockAiProvider } from './mock-ai.provider';
-import { AnthropicProvider } from './providers/anthropic.provider';
-import { GoogleProvider } from './providers/google.provider';
-import { OpenAiProvider } from './providers/openai.provider';
-import { CreditsModule } from '../credits/credits.module';
-import { ConfigService } from '@nestjs/config';
 import {
   AI_HISTORY_STORE,
   CloudflareD1AiHistoryStore,
   NoopAiHistoryStore,
 } from './ai-history.store';
+import { AiProviderRegistry } from './ai-provider.registry';
+import { AiController } from './ai.controller';
+import { AiService } from './ai.service';
+import { FakeAiController } from './fake-ai.controller';
+import { FakeAiService } from './fake-ai.service';
+import { MockAiProvider } from './mock-ai.provider';
+import { AnthropicProvider } from './providers/anthropic.provider';
+import { GoogleProvider } from './providers/google.provider';
+import { OpenAiProvider } from './providers/openai.provider';
+
 @Module({
   imports: [CreditsModule],
-  controllers: [AiController, AiCredentialsController, AdminAiController],
+  controllers: [
+    AiController,
+    AiCredentialsController,
+    AdminAiController,
+    FakeAiController,
+  ],
   providers: [
     MockAiProvider,
     OpenAiProvider,
@@ -37,6 +45,7 @@ import {
           : new NoopAiHistoryStore(),
     },
     AiService,
+    FakeAiService,
   ],
   exports: [AiService],
 })
