@@ -5,6 +5,7 @@ import {
   AdminTemplateCategoriesController,
   PublicTemplatesController,
   TemplateCategoriesController,
+  TemplateObjectsController,
   TemplatesController,
   TemplateSharesController,
 } from './templates.controller';
@@ -20,6 +21,7 @@ import { TemplatesService } from './templates.service';
     PublicTemplatesController,
     TemplateSharesController,
     TemplateCategoriesController,
+    TemplateObjectsController,
     AdminTemplatesController,
     AdminTemplateCategoriesController,
   ],

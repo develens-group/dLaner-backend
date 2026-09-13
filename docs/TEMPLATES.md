@@ -6,13 +6,24 @@ Templates are owned metadata records. Each upload creates a new `TemplateVersion
 
 Authenticated owners use `/api/v1/templates` to create, list `mine`, manage, soft-delete, archive/restore, create/list versions, submit, and manage share links. Reviewers/admins use `/api/v1/admin/templates/review-queue` and `approve`, `reject`, `request-changes`, or `unpublish`. Owners cannot review their own work. Public clients use `/api/v1/public/templates`, `/:slug`, `/download`, versioned downloads, and `/api/v1/template-categories`. Unlisted/private access uses the one-time-visible URL returned by `POST /api/v1/templates/:id/share-links`; only its SHA-256 digest is stored.
 
-Create a version with `{ "library": { "type":"dlanderlib", "version":2, "source":"dlander", "libraryItems":[...] }, "changelog":"..." }`. The server enforces byte/item/element/depth/string limits, unique external IDs, safe object keys, and UTF-8 encoding. Unknown DTO fields are rejected globally.
+### Save-template flow (Land editor)
+
+1. `POST /api/v1/templates` (`application/json`) creates metadata (`title`, optional `description` / `visibility` / `categoryId` / `tags`).
+2. `POST /api/v1/templates/:id/versions` accepts **JSON** or **multipart/form-data**:
+   - JSON: `{ library, changelog?, previewImageBase64?, previewImageType? }` — base64 without `data:` prefix preferred (`image/jpeg` | `image/png`)
+   - Multipart: `library` (JSON string), `changelog`, `previewImage` (file), `previewImageType`
+   - Library shape: `type`, `version`, `source`, `libraryItems[]` with required `name`
+3. Draft/PRIVATE templates appear in `GET /api/v1/templates/mine` and manage immediately (`reviewStatus=DRAFT`). Explore stays `PUBLIC + APPROVED + ACTIVE` only.
+4. Card serialization includes `previewUrl`, `currentVersion.previewUrl`, `currentVersion.items`, and `downloadUrl` **only when `visibility === PUBLIC`** (otherwise `null`).
+5. Preview files are served from `TEMPLATE_STORAGE_PUBLIC_BASE_URL` (default local proxy: `/api/v1/template-objects/...`).
+
+Create a version library with `{ "type":"dlanderlib", "version":2, "source":"dlander", "libraryItems":[...] }`. The server enforces byte/item/element/depth/string limits, unique external IDs, safe object keys, and UTF-8 encoding. Unknown DTO fields are rejected globally.
 
 ## Storage and deployment
 
 For development use `TEMPLATE_STORAGE_DRIVER=local` and `TEMPLATE_STORAGE_LOCAL_PATH=.data/templates`; this directory must be persistent and is never served as a static public directory. For production use `s3` plus bucket, region, endpoint, access key and secret key settings documented in `.env.example`. Credentials are blank in examples. Deploy with `npm install`, `npx prisma generate`, `npx prisma migrate deploy`, then `npm run build`. The migration also seeds `general`, `forms`, and `diagrams` categories.
 
-The frontend index response is `{data: items, meta: pagination}`. Each item contains its category (use `category.slug` as `tabId`), current version/items and stable download URL. Frontends may adapt it to `{tabs,items,pagination}` without accessing storage keys.
+The frontend index response is `{data: items, meta: pagination}`. Each item contains its category (use `category.slug` as `tabId`), current version/items, `previewUrl`, and `downloadUrl` only for PUBLIC templates. Frontends may adapt it to `{tabs,items,pagination}` without accessing storage keys.
 
 ## Admin panel
 

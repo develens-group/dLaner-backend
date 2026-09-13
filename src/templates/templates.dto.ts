@@ -7,6 +7,7 @@ import {
   IsEnum,
   IsIn,
   IsInt,
+  IsNotEmpty,
   IsObject,
   IsOptional,
   IsString,
@@ -15,6 +16,7 @@ import {
   Max,
   MaxLength,
   Min,
+  ValidateIf,
   ValidateNested,
 } from 'class-validator';
 import { PartialType } from '@nestjs/swagger';
@@ -28,10 +30,10 @@ export class LibraryItemDto {
   @IsString() @MaxLength(150) id!: string;
   @IsIn(['published', 'unpublished']) status!: 'published' | 'unpublished';
   @IsArray() elements!: unknown[];
-  @IsInt() @Min(0) created!: number;
-  @IsOptional() @IsString() @MaxLength(150) name?: string;
+  @IsOptional() @IsInt() @Min(0) created?: number;
+  @IsString() @MaxLength(150) name!: string;
   @IsOptional() @IsString() @MaxLength(100) category?: string;
-  @IsOptional() @IsString() @MaxLength(100) form?: string;
+  @IsOptional() @IsIn(['craft', 'html', 'frame']) form?: 'craft' | 'html' | 'frame';
   @IsOptional() @IsString() @MaxLength(1000) description?: string;
 }
 export class LibraryDto {
@@ -44,14 +46,20 @@ export class LibraryDto {
   libraryItems!: LibraryItemDto[];
 }
 export class CreateTemplateDto {
-  @IsString() @MaxLength(150) title!: string;
+  @IsString() @IsNotEmpty() @MaxLength(150) title!: string;
   @IsOptional()
   @Matches(/^[a-z0-9]+(?:-[a-z0-9]+)*$/)
   @MaxLength(100)
   slug?: string;
   @IsOptional() @IsString() @MaxLength(2000) description?: string;
   @IsOptional() @IsEnum(TemplateVisibility) visibility?: TemplateVisibility;
-  @IsOptional() @IsUUID() categoryId?: string;
+  @IsOptional()
+  @Transform(({ value }: { value: unknown }) =>
+    value === null || value === '' ? null : value,
+  )
+  @ValidateIf((_, value) => value !== null && value !== undefined)
+  @IsUUID()
+  categoryId?: string | null;
   @IsOptional()
   @IsArray()
   @ArrayMaxSize(20)
@@ -61,8 +69,27 @@ export class CreateTemplateDto {
 }
 export class UpdateTemplateDto extends PartialType(CreateTemplateDto) {}
 export class CreateVersionDto {
-  @IsObject() @ValidateNested() @Type(() => LibraryDto) library!: LibraryDto;
+  @Transform(({ value }: { value: unknown }) => {
+    if (typeof value !== 'string') return value;
+    try {
+      return JSON.parse(value) as unknown;
+    } catch {
+      return value;
+    }
+  })
+  @IsObject()
+  @ValidateNested()
+  @Type(() => LibraryDto)
+  library!: LibraryDto;
   @IsOptional() @IsString() @MaxLength(1000) changelog?: string;
+  /** Raw base64 (no data: prefix preferred). Optional JSON-body preview. */
+  @IsOptional()
+  @IsString()
+  @MaxLength(8_000_000)
+  previewImageBase64?: string;
+  @IsOptional()
+  @IsIn(['image/jpeg', 'image/jpg', 'image/png'])
+  previewImageType?: 'image/jpeg' | 'image/jpg' | 'image/png';
 }
 export class ReviewDto {
   @IsOptional() @IsString() @MaxLength(1000) comment?: string;

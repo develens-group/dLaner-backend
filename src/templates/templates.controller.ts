@@ -11,10 +11,19 @@ import {
   Query,
   Req,
   Res,
+  UploadedFile,
+  UseInterceptors,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { FileInterceptor } from '@nestjs/platform-express';
+import {
+  ApiBearerAuth,
+  ApiBody,
+  ApiConsumes,
+  ApiTags,
+} from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import type { Request, Response } from 'express';
+import { memoryStorage } from 'multer';
 import { UserRole } from '@prisma/client';
 import { response } from '../common/api-response';
 import { AuditService } from '../audit/audit.service';
@@ -72,12 +81,51 @@ export class TemplatesController {
   }
   @Post(':id/versions')
   @Throttle({ default: { limit: 10, ttl: 60000 } })
+  @ApiConsumes('multipart/form-data', 'application/json')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['library'],
+      properties: {
+        library: {
+          oneOf: [
+            { type: 'string', description: 'JSON string (multipart)' },
+            { type: 'object', description: 'Library object (JSON body)' },
+          ],
+        },
+        changelog: { type: 'string' },
+        previewImageBase64: {
+          type: 'string',
+          description: 'Optional JPEG/PNG as raw base64 (JSON body)',
+        },
+        previewImageType: {
+          type: 'string',
+          enum: ['image/jpeg', 'image/jpg', 'image/png'],
+          example: 'image/png',
+        },
+        previewImage: {
+          type: 'string',
+          format: 'binary',
+          description: 'Optional JPEG/PNG file (multipart)',
+        },
+      },
+    },
+  })
+  @UseInterceptors(
+    FileInterceptor('previewImage', {
+      storage: memoryStorage(),
+      limits: { fileSize: 5 * 1024 * 1024 },
+    }),
+  )
   version(
     @CurrentUser() u: AccessPrincipal,
     @Param('id', ParseUUIDPipe) id: string,
     @Body() d: CreateVersionDto,
+    @UploadedFile() previewImage?: Express.Multer.File,
   ) {
-    return this.wrap(this.service.createVersion(u.userId, id, d));
+    return this.wrap(
+      this.service.createVersion(u.userId, id, d, previewImage),
+    );
   }
   @Get(':id/versions') versions(
     @CurrentUser() u: AccessPrincipal,
@@ -191,6 +239,29 @@ export class TemplateCategoriesController {
   constructor(private readonly s: TemplatesService) {}
   @Public() @Get() async get() {
     return response(await this.s.categories());
+  }
+}
+@ApiTags('template-objects')
+@Controller('api/v1/template-objects')
+export class TemplateObjectsController {
+  constructor(private readonly service: TemplatesService) {}
+
+  @Public()
+  @Get('templates/:templateId/versions/:versionId/:filename')
+  async get(
+    @Param('templateId', ParseUUIDPipe) templateId: string,
+    @Param('versionId', ParseUUIDPipe) versionId: string,
+    @Param('filename') filename: string,
+    @Res() res: Response,
+  ) {
+    const key = `templates/${templateId}/versions/${versionId}/${filename}`;
+    const object = await this.service.streamPublicObject(key);
+    const lower = filename.toLowerCase();
+    res.set({
+      'Content-Type': lower.endsWith('.png') ? 'image/png' : 'image/jpeg',
+      'Cache-Control': 'public, max-age=31536000, immutable',
+    });
+    object.stream.pipe(res);
   }
 }
 @ApiTags('admin-templates')

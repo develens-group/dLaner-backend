@@ -53,17 +53,22 @@ export class TemplatesService {
         `template-${randomBytes(4).toString('hex')}`);
     for (let n = 0; n < 5; n++)
       try {
-        return await this.prisma.template.create({
+        const created = await this.prisma.template.create({
           data: {
             ownerId,
             title: dto.title.trim(),
             slug: n ? `${base}-${randomBytes(3).toString('hex')}` : base,
             description: dto.description?.trim(),
             visibility: dto.visibility,
-            categoryId: dto.categoryId,
+            categoryId: dto.categoryId ?? undefined,
             tags: dto.tags?.map((x) => x.trim().toLowerCase()),
           },
+          include: {
+            currentVersion: { include: { items: true } },
+            category: true,
+          },
         });
+        return this.enrichTemplate(created);
       } catch (e) {
         if (!(
           e instanceof Prisma.PrismaClientKnownRequestError &&
@@ -86,42 +91,61 @@ export class TemplatesService {
         code: 'TEMPLATE_NOT_FOUND',
         message: 'Template not found',
       });
-    return item;
+    return this.enrichTemplate(item);
   }
   async mine(ownerId: string, q: ListTemplatesDto) {
     return this.page({ ownerId, deletedAt: null }, q, true);
   }
   async update(ownerId: string, id: string, dto: UpdateTemplateDto) {
     await this.owned(ownerId, id);
-    return this.prisma.template.update({
-      where: { id },
-      data: {
-        title: dto.title?.trim(),
-        slug: dto.slug,
-        description: dto.description?.trim(),
-        visibility: dto.visibility,
-        categoryId: dto.categoryId,
-        tags: dto.tags?.map((x) => x.trim().toLowerCase()),
-      },
-    });
+    return this.enrichTemplate(
+      await this.prisma.template.update({
+        where: { id },
+        data: {
+          title: dto.title?.trim(),
+          slug: dto.slug,
+          description: dto.description?.trim(),
+          visibility: dto.visibility,
+          ...(dto.categoryId !== undefined
+            ? { categoryId: dto.categoryId }
+            : {}),
+          tags: dto.tags?.map((x) => x.trim().toLowerCase()),
+        },
+        include: {
+          currentVersion: { include: { items: true } },
+          category: true,
+        },
+      }),
+    );
   }
   async remove(ownerId: string, id: string) {
-    await this.owned(ownerId, id);
+    await this.requireOwned(ownerId, id);
     return this.prisma.template.update({
       where: { id },
       data: { deletedAt: new Date() },
     });
   }
   async lifecycle(ownerId: string, id: string, archived: boolean) {
-    await this.owned(ownerId, id);
-    return this.prisma.template.update({
-      where: { id },
-      data: { lifecycleStatus: archived ? 'ARCHIVED' : 'ACTIVE' },
-    });
+    await this.requireOwned(ownerId, id);
+    return this.enrichTemplate(
+      await this.prisma.template.update({
+        where: { id },
+        data: { lifecycleStatus: archived ? 'ARCHIVED' : 'ACTIVE' },
+        include: {
+          currentVersion: { include: { items: true } },
+          category: true,
+        },
+      }),
+    );
   }
 
-  async createVersion(ownerId: string, id: string, dto: CreateVersionDto) {
-    const template = await this.owned(ownerId, id);
+  async createVersion(
+    ownerId: string,
+    id: string,
+    dto: CreateVersionDto,
+    previewImage?: Express.Multer.File,
+  ) {
+    const template = await this.requireOwned(ownerId, id);
     if (template.reviewStatus === 'PENDING')
       throw new ConflictException({
         code: 'TEMPLATE_ALREADY_PENDING',
@@ -136,8 +160,17 @@ export class TemplatesService {
     const manifestKey = `templates/${id}/versions/${versionId}/manifest.json`;
     const body = Buffer.from(raw, 'utf8');
     await this.storage.putObject(manifestKey, body, 'application/json');
+    let previewKey: string | undefined;
     try {
-      return await this.prisma.$transaction(
+      const preview = this.resolvePreviewInput(previewImage, dto);
+      if (preview)
+        previewKey = await this.storePreviewBuffer(
+          id,
+          versionId,
+          preview.buffer,
+          preview.mime,
+        );
+      const version = await this.prisma.$transaction(
         async (tx) => {
           const latest = await tx.templateVersion.findFirst({
             where: { templateId: id },
@@ -145,7 +178,7 @@ export class TemplatesService {
             select: { versionNumber: true },
           });
           const versionNumber = (latest?.versionNumber ?? 0) + 1;
-          const version = await tx.templateVersion.create({
+          const created = await tx.templateVersion.create({
             data: {
               id: versionId,
               templateId: id,
@@ -156,12 +189,13 @@ export class TemplatesService {
               source: dto.library.source,
               itemCount: dto.library.libraryItems.length,
               manifestStorageKey: manifestKey,
+              previewStorageKey: previewKey,
               contentHash: sha256(body),
               createdById: ownerId,
               items: {
                 create: dto.library.libraryItems.map((x, index) => ({
                   externalId: x.id,
-                  name: x.name,
+                  name: x.name.trim(),
                   description: x.description,
                   category: x.category,
                   form: x.form,
@@ -171,17 +205,25 @@ export class TemplatesService {
                 })),
               },
             },
+            include: { items: true },
           });
           await tx.template.update({
             where: { id },
-            data: { reviewStatus: 'DRAFT', rejectionReason: null },
+            data: {
+              reviewStatus: 'DRAFT',
+              rejectionReason: null,
+              currentVersionId: created.id,
+            },
           });
-          return version;
+          return created;
         },
         { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
       );
+      return this.enrichVersion(version);
     } catch (e) {
       await this.storage.deleteObject(manifestKey).catch(() => undefined);
+      if (previewKey)
+        await this.storage.deleteObject(previewKey).catch(() => undefined);
       if (
         e instanceof Prisma.PrismaClientKnownRequestError &&
         e.code === 'P2002'
@@ -193,6 +235,95 @@ export class TemplatesService {
       throw e;
     }
   }
+
+  private resolvePreviewInput(
+    file: Express.Multer.File | undefined,
+    dto: CreateVersionDto,
+  ): { buffer: Buffer; mime: string } | undefined {
+    if (file?.buffer?.length) {
+      return {
+        buffer: file.buffer,
+        mime: (file.mimetype || dto.previewImageType || '').toLowerCase(),
+      };
+    }
+    const raw = dto.previewImageBase64?.trim();
+    if (!raw) return undefined;
+    const dataUrl = /^data:(image\/(?:jpeg|jpg|png));base64,(.+)$/i.exec(raw);
+    const mimeFromDataUrl = dataUrl?.[1]?.toLowerCase();
+    const base64 = (dataUrl?.[2] ?? raw).replace(/\s/g, '');
+    let buffer: Buffer;
+    try {
+      buffer = Buffer.from(base64, 'base64');
+    } catch {
+      throw problem('TEMPLATE_INVALID_PAYLOAD', 'Invalid previewImageBase64');
+    }
+    if (!buffer.length)
+      throw problem('TEMPLATE_INVALID_PAYLOAD', 'previewImage is empty');
+    const maxBytes = 5 * 1024 * 1024;
+    if (buffer.length > maxBytes)
+      throw problem(
+        'TEMPLATE_INVALID_PAYLOAD',
+        'previewImage exceeds 5MB limit',
+      );
+    const mime = (
+      dto.previewImageType ||
+      mimeFromDataUrl ||
+      ''
+    ).toLowerCase();
+    if (!mime)
+      throw problem(
+        'TEMPLATE_INVALID_PAYLOAD',
+        'previewImageType is required with previewImageBase64',
+      );
+    return { buffer, mime };
+  }
+
+  private async storePreviewBuffer(
+    templateId: string,
+    versionId: string,
+    buffer: Buffer,
+    mimeInput: string,
+  ) {
+    const mime = mimeInput.toLowerCase();
+    const allowed = new Map([
+      ['image/jpeg', 'jpg'],
+      ['image/jpg', 'jpg'],
+      ['image/png', 'png'],
+    ]);
+    const ext = allowed.get(mime);
+    if (!ext)
+      throw problem(
+        'TEMPLATE_INVALID_PAYLOAD',
+        'previewImage must be image/jpeg or image/png',
+      );
+    if (!buffer.length)
+      throw problem('TEMPLATE_INVALID_PAYLOAD', 'previewImage is empty');
+    const maxBytes = 5 * 1024 * 1024;
+    if (buffer.length > maxBytes)
+      throw problem(
+        'TEMPLATE_INVALID_PAYLOAD',
+        'previewImage exceeds 5MB limit',
+      );
+    const key = `templates/${templateId}/versions/${versionId}/preview.${ext}`;
+    await this.storage.putObject(
+      key,
+      buffer,
+      mime === 'image/jpg' ? 'image/jpeg' : mime,
+    );
+    return key;
+  }
+
+  private async requireOwned(ownerId: string, id: string) {
+    const item = await this.prisma.template.findFirst({
+      where: { id, ownerId, deletedAt: null },
+    });
+    if (!item)
+      throw new NotFoundException({
+        code: 'TEMPLATE_NOT_FOUND',
+        message: 'Template not found',
+      });
+    return item;
+  }
   private validateLibrary(lib: CreateVersionDto['library']) {
     const maxItems = this.config.get<number>('TEMPLATE_MAX_ITEMS', 100);
     const maxElements = this.config.get<number>(
@@ -203,6 +334,8 @@ export class TemplatesService {
       throw problem('TEMPLATE_INVALID_PAYLOAD', 'Too many items');
     const ids = new Set<string>();
     for (const item of lib.libraryItems) {
+      if (!item.name?.trim())
+        throw problem('TEMPLATE_INVALID_PAYLOAD', 'Item name is required');
       if (ids.has(item.id))
         throw problem('TEMPLATE_INVALID_PAYLOAD', 'Duplicate item id');
       ids.add(item.id);
@@ -223,23 +356,25 @@ export class TemplatesService {
     }
   }
   async versions(ownerId: string, id: string) {
-    await this.owned(ownerId, id);
-    return this.prisma.templateVersion.findMany({
+    await this.requireOwned(ownerId, id);
+    const rows = await this.prisma.templateVersion.findMany({
       where: { templateId: id },
       orderBy: { versionNumber: 'desc' },
+      include: { items: true },
     });
+    return rows.map((row) => this.enrichVersion(row));
   }
   async version(ownerId: string, id: string, versionId: string) {
-    await this.owned(ownerId, id);
+    await this.requireOwned(ownerId, id);
     const v = await this.prisma.templateVersion.findFirst({
       where: { id: versionId, templateId: id },
       include: { items: true },
     });
     if (!v) throw new NotFoundException();
-    return v;
+    return this.enrichVersion(v);
   }
   async submit(ownerId: string, id: string) {
-    await this.owned(ownerId, id);
+    await this.requireOwned(ownerId, id);
     const latest = await this.prisma.templateVersion.findFirst({
       where: { templateId: id },
       orderBy: { versionNumber: 'desc' },
@@ -253,11 +388,15 @@ export class TemplatesService {
       const out = await tx.template.update({
         where: { id },
         data: { reviewStatus: 'PENDING', submittedAt: new Date() },
+        include: {
+          currentVersion: { include: { items: true } },
+          category: true,
+        },
       });
       await tx.templateReview.create({
         data: { templateId: id, action: 'SUBMITTED' },
       });
-      return out;
+      return this.enrichTemplate(out);
     });
   }
   async review(
@@ -444,7 +583,9 @@ export class TemplatesService {
       this.prisma.template.count({ where }),
     ]);
     return {
-      items: manage ? items : items.map((x) => this.serializePublic(x)),
+      items: items.map((x) =>
+        manage ? this.enrichTemplate(x) : this.serializePublic(x),
+      ),
       pagination: {
         page: q.page,
         limit: q.limit,
@@ -477,16 +618,20 @@ export class TemplatesService {
     return this.serializePublic(t);
   }
   private serializePublic(t: any) {
+    const previewUrl = this.previewUrl(t.currentVersion);
     return {
       id: t.id,
       slug: t.slug,
       title: t.title,
       description: t.description,
       tags: t.tags,
+      visibility: t.visibility,
       category: t.category,
       owner: t.owner,
+      previewUrl,
       currentVersion: t.currentVersion && {
         versionNumber: t.currentVersion.versionNumber,
+        previewUrl,
         items: t.currentVersion.items.map((x: any) => ({
           id: x.externalId,
           name: x.name,
@@ -496,8 +641,58 @@ export class TemplatesService {
           elements: x.elementsJson,
         })),
       },
-      downloadUrl: `/api/v1/public/templates/${t.slug}/download`,
+      downloadUrl:
+        t.visibility === 'PUBLIC'
+          ? `/api/v1/public/templates/${t.slug}/download`
+          : null,
     };
+  }
+
+  private enrichTemplate<T extends Record<string, any>>(t: T) {
+    const previewUrl = this.previewUrl(t.currentVersion);
+    return {
+      ...t,
+      previewUrl,
+      currentVersion: t.currentVersion
+        ? this.enrichVersion(t.currentVersion)
+        : t.currentVersion,
+      downloadUrl:
+        t.visibility === 'PUBLIC'
+          ? `/api/v1/public/templates/${t.slug}/download`
+          : null,
+    };
+  }
+
+  private enrichVersion<T extends Record<string, any>>(v: T) {
+    return {
+      ...v,
+      previewUrl: this.previewUrl(v),
+    };
+  }
+
+  private previewUrl(version?: { previewStorageKey?: string | null } | null) {
+    if (!version?.previewStorageKey) return null;
+    return this.publicObjectUrl(version.previewStorageKey);
+  }
+
+  publicObjectUrl(key: string) {
+    const base = this.config
+      .get('TEMPLATE_STORAGE_PUBLIC_BASE_URL', '')
+      .replace(/\/$/, '');
+    if (!base) return null;
+    return `${base}/${key.split('/').map(encodeURIComponent).join('/')}`;
+  }
+
+  async streamPublicObject(key: string) {
+    if (
+      !/^templates\/[0-9a-f-]{36}\/versions\/[0-9a-f-]{36}\/preview\.(jpe?g|png)$/i.test(
+        key,
+      )
+    )
+      throw new NotFoundException('Object not found');
+    if (!(await this.storage.objectExists(key)))
+      throw new NotFoundException('Object not found');
+    return this.storage.streamObject(key);
   }
   async download(slug: string, versionNumber?: number) {
     const t = await this.prisma.template.findFirst({
@@ -523,7 +718,7 @@ export class TemplatesService {
     };
   }
   async createShare(ownerId: string, id: string, dto: ShareDto) {
-    const t = await this.owned(ownerId, id);
+    const t = await this.requireOwned(ownerId, id);
     if (!t.currentVersionId)
       throw new ConflictException({
         code: 'TEMPLATE_NOT_READY',
@@ -546,7 +741,7 @@ export class TemplatesService {
     };
   }
   async revokeShare(ownerId: string, id: string, shareId: string) {
-    await this.owned(ownerId, id);
+    await this.requireOwned(ownerId, id);
     return this.prisma.templateShare.updateMany({
       where: { id: shareId, templateId: id },
       data: { revokedAt: new Date() },
