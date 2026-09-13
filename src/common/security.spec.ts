@@ -1,4 +1,5 @@
 import {
+  createEmailOtpCode,
   createOpaqueToken,
   hashOpaqueToken,
   normalizeEmail,
@@ -20,5 +21,10 @@ describe('security helpers', () => {
     expect(safeHashEqual(hashOpaqueToken(first), hashOpaqueToken(second))).toBe(
       false,
     );
+  });
+  it('creates 6-digit email OTP codes', () => {
+    const code = createEmailOtpCode();
+    expect(code).toMatch(/^\d{6}$/);
+    expect(hashOpaqueToken(code)).toHaveLength(64);
   });
 });

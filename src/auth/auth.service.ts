@@ -19,7 +19,7 @@ import { randomInt } from 'node:crypto';
 import { durationMs } from '../common/duration';
 import { ClientContext } from '../common/request-context';
 import {
-  createOpaqueToken,
+  createEmailOtpCode,
   hashOpaqueToken,
   normalizeEmail,
 } from '../common/security';
@@ -64,7 +64,7 @@ export class AuthService {
       type: argon2.argon2id,
     });
     const verificationRequired = this.verificationRequired();
-    const token = verificationRequired ? createOpaqueToken() : undefined;
+    const token = verificationRequired ? createEmailOtpCode() : undefined;
     const user = await this.prisma.$transaction(async (tx) => {
       const created = await tx.user.create({
         data: {
@@ -91,14 +91,15 @@ export class AuthService {
     return {
       user: publicUser(user),
       message: verificationRequired
-        ? 'Registration successful. Check your email to verify your account.'
+        ? 'Registration successful. Enter the 6-digit code sent to your email.'
         : 'Registration successful. Your account is active.',
     };
   }
 
   async verifyEmail(token: string) {
     this.assertVerificationEnabled();
-    const tokenHash = hashOpaqueToken(token);
+    const code = token.trim().replace(/\s+/g, '');
+    const tokenHash = hashOpaqueToken(code);
     await this.prisma.$transaction(async (tx) => {
       const record = await tx.emailVerificationToken.findUnique({
         where: { tokenHash },
@@ -126,7 +127,7 @@ export class AuthService {
     const email = normalizeEmail(emailInput);
     const user = await this.prisma.user.findUnique({ where: { email } });
     if (user?.status === UserStatus.PENDING_VERIFICATION) {
-      const token = createOpaqueToken();
+      const token = createEmailOtpCode();
       await this.prisma.$transaction([
         this.prisma.emailVerificationToken.updateMany({
           where: { userId: user.id, usedAt: null },
@@ -144,7 +145,7 @@ export class AuthService {
     }
     return {
       message:
-        'If the account is eligible, a verification email has been sent.',
+        'If the account is eligible, a verification code has been sent.',
     };
   }
 
@@ -399,7 +400,7 @@ export class AuthService {
       where: { email: normalizeEmail(emailInput) },
     });
     if (user?.status === UserStatus.ACTIVE) {
-      const token = createOpaqueToken();
+      const token = createEmailOtpCode();
       await this.prisma.$transaction([
         this.prisma.passwordResetToken.updateMany({
           where: { userId: user.id, usedAt: null },
@@ -417,11 +418,12 @@ export class AuthService {
     }
     return {
       message:
-        'If an eligible account exists, password reset instructions have been sent.',
+        'If an eligible account exists, a password reset code has been sent.',
     };
   }
   async resetPassword(dto: ResetPasswordDto) {
-    const tokenHash = hashOpaqueToken(dto.token);
+    const code = dto.token.trim().replace(/\s+/g, '');
+    const tokenHash = hashOpaqueToken(code);
     const passwordHash = await argon2.hash(dto.newPassword);
     await this.prisma.$transaction(async (tx) => {
       const record = await tx.passwordResetToken.findUnique({

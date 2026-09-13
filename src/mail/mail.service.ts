@@ -20,24 +20,52 @@ export class MailService implements OnModuleDestroy {
     }
   }
 
-  async sendVerification(email: string, token: string) {
-    const url = `${this.config.getOrThrow<string>('FRONTEND_URL')}/verify-email?token=${encodeURIComponent(token)}`;
-    await this.send(
-      email,
-      'Verify your email',
-      `Verify your email: ${url}`,
-      `<p>Verify your email: <a href="${url}">${url}</a></p>`,
-    );
+  async sendVerification(email: string, code: string) {
+    const expires = this.config.get('EMAIL_VERIFICATION_EXPIRES_IN', '24h');
+    const subject = 'کد تأیید ایمیل دیلندر';
+    const text = [
+      'کد تأیید ایمیل شما:',
+      code,
+      '',
+      `این کد تا ${expires} معتبر است.`,
+      'کد را در صفحه تأیید ایمیل وارد کنید.',
+      '',
+      'اگر این درخواست از طرف شما نبوده، این ایمیل را نادیده بگیرید.',
+    ].join('\n');
+    const html = `
+      <div dir="rtl" style="font-family:Tahoma,Arial,sans-serif;line-height:1.7;color:#111">
+        <p>کد تأیید ایمیل شما:</p>
+        <p style="font-size:28px;font-weight:700;letter-spacing:6px;margin:16px 0">${code}</p>
+        <p>این کد تا <strong>${expires}</strong> معتبر است.</p>
+        <p>کد را در صفحه تأیید ایمیل اپلیکیشن وارد کنید.</p>
+        <p style="color:#666;font-size:13px">اگر این درخواست از طرف شما نبوده، این ایمیل را نادیده بگیرید.</p>
+      </div>
+    `;
+    await this.send(email, subject, text, html);
   }
 
-  async sendPasswordReset(email: string, token: string) {
-    const url = `${this.config.getOrThrow<string>('FRONTEND_URL')}/reset-password?token=${encodeURIComponent(token)}`;
-    await this.send(
-      email,
-      'Reset your password',
-      `Reset your password: ${url}`,
-      `<p>Reset your password: <a href="${url}">${url}</a></p>`,
-    );
+  async sendPasswordReset(email: string, code: string) {
+    const expires = this.config.get('PASSWORD_RESET_EXPIRES_IN', '1h');
+    const subject = 'کد بازیابی رمز عبور دیلندر';
+    const text = [
+      'کد بازیابی رمز عبور شما:',
+      code,
+      '',
+      `این کد تا ${expires} معتبر است.`,
+      'کد را در صفحه بازیابی رمز وارد کنید و رمز جدید بسازید.',
+      '',
+      'اگر این درخواست از طرف شما نبوده، این ایمیل را نادیده بگیرید و رمز فعلی را تغییر دهید.',
+    ].join('\n');
+    const html = `
+      <div dir="rtl" style="font-family:Tahoma,Arial,sans-serif;line-height:1.7;color:#111">
+        <p>کد بازیابی رمز عبور شما:</p>
+        <p style="font-size:28px;font-weight:700;letter-spacing:6px;margin:16px 0">${code}</p>
+        <p>این کد تا <strong>${expires}</strong> معتبر است.</p>
+        <p>کد را در صفحه بازیابی رمز اپلیکیشن وارد کنید و رمز جدید بسازید.</p>
+        <p style="color:#666;font-size:13px">اگر این درخواست از طرف شما نبوده، این ایمیل را نادیده بگیرید.</p>
+      </div>
+    `;
+    await this.send(email, subject, text, html);
   }
 
   private async send(to: string, subject: string, text: string, html: string) {

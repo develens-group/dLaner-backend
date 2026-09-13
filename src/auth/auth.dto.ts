@@ -66,12 +66,16 @@ export class LoginDto extends EmailDto {
 export class CaptchaRequestDto extends EmailDto {}
 export class TokenDto {
   @ApiProperty({
-    example: 'eyJhbGciOiJIUzI1NiJ9.valid-verification-token',
-    minLength: 20,
-    maxLength: 4096,
+    example: '482913',
+    minLength: 6,
+    maxLength: 16,
+    description: '6-digit email OTP code (verification or password reset)',
   })
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.trim().replace(/\s+/g, '') : value,
+  )
   @IsString()
-  @Length(20, 4096)
+  @Matches(/^\d{6}$/, { message: 'code must be a 6-digit number' })
   token!: string;
 }
 export class RefreshDto {
