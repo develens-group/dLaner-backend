@@ -22,23 +22,23 @@ export class MailService implements OnModuleDestroy {
 
   async sendVerification(email: string, code: string) {
     const expires = this.config.get('EMAIL_VERIFICATION_EXPIRES_IN', '24h');
-    const subject = 'کد تأیید ایمیل دیلندر';
+    const subject = 'Your Dlander email verification code';
     const text = [
-      'کد تأیید ایمیل شما:',
+      'Your email verification code is:',
       code,
       '',
-      `این کد تا ${expires} معتبر است.`,
-      'کد را در صفحه تأیید ایمیل وارد کنید.',
+      `This code expires in ${expires}.`,
+      'Enter it on the email verification screen in the app.',
       '',
-      'اگر این درخواست از طرف شما نبوده، این ایمیل را نادیده بگیرید.',
+      'If you did not request this, you can ignore this email.',
     ].join('\n');
     const html = `
-      <div dir="rtl" style="font-family:Tahoma,Arial,sans-serif;line-height:1.7;color:#111">
-        <p>کد تأیید ایمیل شما:</p>
+      <div style="font-family:Arial,sans-serif;line-height:1.6;color:#111">
+        <p>Your email verification code is:</p>
         <p style="font-size:28px;font-weight:700;letter-spacing:6px;margin:16px 0">${code}</p>
-        <p>این کد تا <strong>${expires}</strong> معتبر است.</p>
-        <p>کد را در صفحه تأیید ایمیل اپلیکیشن وارد کنید.</p>
-        <p style="color:#666;font-size:13px">اگر این درخواست از طرف شما نبوده، این ایمیل را نادیده بگیرید.</p>
+        <p>This code expires in <strong>${expires}</strong>.</p>
+        <p>Enter it on the email verification screen in the app.</p>
+        <p style="color:#666;font-size:13px">If you did not request this, you can ignore this email.</p>
       </div>
     `;
     await this.send(email, subject, text, html);
@@ -46,23 +46,23 @@ export class MailService implements OnModuleDestroy {
 
   async sendPasswordReset(email: string, code: string) {
     const expires = this.config.get('PASSWORD_RESET_EXPIRES_IN', '1h');
-    const subject = 'کد بازیابی رمز عبور دیلندر';
+    const subject = 'Your Dlander password reset code';
     const text = [
-      'کد بازیابی رمز عبور شما:',
+      'Your password reset code is:',
       code,
       '',
-      `این کد تا ${expires} معتبر است.`,
-      'کد را در صفحه بازیابی رمز وارد کنید و رمز جدید بسازید.',
+      `This code expires in ${expires}.`,
+      'Enter it on the password reset screen and choose a new password.',
       '',
-      'اگر این درخواست از طرف شما نبوده، این ایمیل را نادیده بگیرید و رمز فعلی را تغییر دهید.',
+      'If you did not request this, ignore this email and keep your current password.',
     ].join('\n');
     const html = `
-      <div dir="rtl" style="font-family:Tahoma,Arial,sans-serif;line-height:1.7;color:#111">
-        <p>کد بازیابی رمز عبور شما:</p>
+      <div style="font-family:Arial,sans-serif;line-height:1.6;color:#111">
+        <p>Your password reset code is:</p>
         <p style="font-size:28px;font-weight:700;letter-spacing:6px;margin:16px 0">${code}</p>
-        <p>این کد تا <strong>${expires}</strong> معتبر است.</p>
-        <p>کد را در صفحه بازیابی رمز اپلیکیشن وارد کنید و رمز جدید بسازید.</p>
-        <p style="color:#666;font-size:13px">اگر این درخواست از طرف شما نبوده، این ایمیل را نادیده بگیرید.</p>
+        <p>This code expires in <strong>${expires}</strong>.</p>
+        <p>Enter it on the password reset screen and choose a new password.</p>
+        <p style="color:#666;font-size:13px">If you did not request this, ignore this email and keep your current password.</p>
       </div>
     `;
     await this.send(email, subject, text, html);
