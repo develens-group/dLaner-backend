@@ -30,6 +30,7 @@ import { AuditService } from '../audit/audit.service';
 import type { AccessPrincipal } from '../common/auth.types';
 import { CurrentUser, Public, Roles } from '../common/decorators';
 import {
+  BulkCreateTemplatesDto,
   CreateTemplateDto,
   CreateTemplateCategoryDto,
   CreateVersionDto,
@@ -53,6 +54,14 @@ export class TemplatesController {
     @Body() d: CreateTemplateDto,
   ) {
     return this.wrap(this.service.create(u.userId, d));
+  }
+  @Post('bulk')
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
+  bulk(
+    @CurrentUser() u: AccessPrincipal,
+    @Body() d: BulkCreateTemplatesDto,
+  ) {
+    return this.wrap(this.service.createBulk(u.userId, d));
   }
   @Get('mine') mine(
     @CurrentUser() u: AccessPrincipal,

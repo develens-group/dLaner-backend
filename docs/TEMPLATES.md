@@ -8,14 +8,15 @@ Authenticated owners use `/api/v1/templates` to create, list `mine`, manage, sof
 
 ### Save-template flow (Land editor)
 
-1. `POST /api/v1/templates` (`application/json`) creates metadata (`title`, optional `description` / `visibility` / `categoryId` / `tags`).
-2. `POST /api/v1/templates/:id/versions` accepts **JSON** or **multipart/form-data**:
+1. **New templates (one or many):** `POST /api/v1/templates/bulk` with shared `visibility` / `categoryId` / `tags` / `changelog` and `items[]`. Each item becomes its own template + version (`title`, optional `description`, `library`, optional `previewImageBase64` + `previewImageType`). Max 10 items per request.
+2. **Single metadata shell (legacy / rare):** `POST /api/v1/templates` (`application/json`) creates metadata only (`title`, optional `description` / `visibility` / `categoryId` / `tags`).
+3. **Update existing / add version:** `POST /api/v1/templates/:id/versions` accepts **JSON** or **multipart/form-data**:
    - JSON: `{ library, changelog?, previewImageBase64?, previewImageType? }` — base64 without `data:` prefix preferred (`image/jpeg` | `image/png`)
    - Multipart: `library` (JSON string), `changelog`, `previewImage` (file), `previewImageType`
    - Library shape: `type`, `version`, `source`, `libraryItems[]` with required `name`
-3. Draft/PRIVATE templates appear in `GET /api/v1/templates/mine` and manage immediately (`reviewStatus=DRAFT`). Explore stays `PUBLIC + APPROVED + ACTIVE` only.
-4. Card serialization includes `previewUrl`, `currentVersion.previewUrl`, `currentVersion.items`, and `downloadUrl` **only when `visibility === PUBLIC`** (otherwise `null`).
-5. Preview files are served from `TEMPLATE_STORAGE_PUBLIC_BASE_URL` (default local proxy: `/api/v1/template-objects/...`).
+4. Draft/PRIVATE templates appear in `GET /api/v1/templates/mine` and manage immediately (`reviewStatus=DRAFT`). Explore stays `PUBLIC + APPROVED + ACTIVE` only.
+5. Card serialization includes `previewUrl`, `currentVersion.previewUrl`, `currentVersion.items`, and `downloadUrl` **only when `visibility === PUBLIC`** (otherwise `null`).
+6. Preview files are served from `TEMPLATE_STORAGE_PUBLIC_BASE_URL` (default local proxy: `/api/v1/template-objects/...`).
 
 Create a version library with `{ "type":"dlanderlib", "version":2, "source":"dlander", "libraryItems":[...] }`. The server enforces byte/item/element/depth/string limits, unique external IDs, safe object keys, and UTF-8 encoding. Unknown DTO fields are rejected globally.
 

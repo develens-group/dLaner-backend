@@ -19,6 +19,7 @@ import { OBJECT_STORAGE } from './template-storage';
 import type { ObjectStorageService } from './template-storage';
 import { Inject } from '@nestjs/common';
 import {
+  BulkCreateTemplatesDto,
   CreateTemplateDto,
   CreateTemplateCategoryDto,
   CreateVersionDto,
@@ -80,6 +81,56 @@ export class TemplatesService {
       code: 'TEMPLATE_SLUG_CONFLICT',
       message: 'Could not allocate a unique slug',
     });
+  }
+
+  async createBulk(ownerId: string, dto: BulkCreateTemplatesDto) {
+    if (!dto.items?.length)
+      throw problem('TEMPLATE_INVALID_PAYLOAD', 'At least one item is required');
+    if (dto.items.length > 10)
+      throw problem('TEMPLATE_INVALID_PAYLOAD', 'Too many bulk items (max 10)');
+
+    const maxBundle = this.config.get<number>(
+      'TEMPLATE_MAX_BUNDLE_BYTES',
+      5_000_000,
+    );
+    for (const item of dto.items) {
+      const raw = JSON.stringify(item.library);
+      if (Buffer.byteLength(raw) > maxBundle)
+        throw problem('TEMPLATE_INVALID_PAYLOAD', 'Library is too large');
+      this.validateLibrary(item.library);
+      this.resolvePreviewInput(undefined, {
+        library: item.library,
+        previewImageBase64: item.previewImageBase64,
+        previewImageType: item.previewImageType,
+      });
+    }
+
+    const createdIds: string[] = [];
+    try {
+      const out = [];
+      for (const item of dto.items) {
+        const created = await this.create(ownerId, {
+          title: item.title,
+          description: item.description,
+          visibility: dto.visibility,
+          categoryId: dto.categoryId,
+          tags: dto.tags,
+        });
+        createdIds.push(created.id);
+        await this.createVersion(ownerId, created.id, {
+          library: item.library,
+          changelog: dto.changelog,
+          previewImageBase64: item.previewImageBase64,
+          previewImageType: item.previewImageType,
+        });
+        out.push(await this.owned(ownerId, created.id));
+      }
+      return out;
+    } catch (e) {
+      for (const id of createdIds)
+        await this.remove(ownerId, id).catch(() => undefined);
+      throw e;
+    }
   }
   async owned(ownerId: string, id: string) {
     const item = await this.prisma.template.findFirst({

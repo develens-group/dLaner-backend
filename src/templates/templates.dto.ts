@@ -1,6 +1,7 @@
 import { Transform, Type } from 'class-transformer';
 import {
   ArrayMaxSize,
+  ArrayMinSize,
   IsArray,
   IsBoolean,
   IsDate,
@@ -68,6 +69,47 @@ export class CreateTemplateDto {
   tags?: string[];
 }
 export class UpdateTemplateDto extends PartialType(CreateTemplateDto) {}
+
+export class BulkCreateTemplateItemDto {
+  @IsString() @IsNotEmpty() @MaxLength(150) title!: string;
+  @IsOptional() @IsString() @MaxLength(2000) description?: string;
+  @IsObject()
+  @ValidateNested()
+  @Type(() => LibraryDto)
+  library!: LibraryDto;
+  @IsOptional()
+  @IsString()
+  @MaxLength(8_000_000)
+  previewImageBase64?: string;
+  @IsOptional()
+  @IsIn(['image/jpeg', 'image/jpg', 'image/png'])
+  previewImageType?: 'image/jpeg' | 'image/jpg' | 'image/png';
+}
+
+export class BulkCreateTemplatesDto {
+  @IsOptional() @IsEnum(TemplateVisibility) visibility?: TemplateVisibility;
+  @IsOptional()
+  @Transform(({ value }: { value: unknown }) =>
+    value === null || value === '' ? null : value,
+  )
+  @ValidateIf((_, value) => value !== null && value !== undefined)
+  @IsUUID()
+  categoryId?: string | null;
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(20)
+  @IsString({ each: true })
+  @MaxLength(50, { each: true })
+  tags?: string[];
+  @IsOptional() @IsString() @MaxLength(1000) changelog?: string;
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(10)
+  @ValidateNested({ each: true })
+  @Type(() => BulkCreateTemplateItemDto)
+  items!: BulkCreateTemplateItemDto[];
+}
+
 export class CreateVersionDto {
   @Transform(({ value }: { value: unknown }) => {
     if (typeof value !== 'string') return value;
