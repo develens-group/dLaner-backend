@@ -427,9 +427,11 @@ model AiRequest {
   completedAt         DateTime?
   createdAt           DateTime           @default(now())
   updatedAt           DateTime           @updatedAt
+  variantId           String?            @db.Uuid
   user                User               @relation(fields: [userId], references: [id], onDelete: Restrict)
   credential          UserAiCredential?  @relation(fields: [credentialId], references: [id], onDelete: SetNull)
   creditReservation   CreditReservation? @relation(fields: [creditReservationId], references: [id], onDelete: SetNull)
+  variant             AiProviderVariant? @relation(fields: [variantId], references: [id], onDelete: SetNull)
 
   @@unique([userId, idempotencyKey])
   @@index([userId, createdAt])
@@ -438,6 +440,7 @@ model AiRequest {
   @@index([requestId])
   @@index([creditReservationId])
   @@index([credentialId])
+  @@index([variantId])
 }
 
 model UserAiCredential {
@@ -460,6 +463,44 @@ model UserAiCredential {
   @@index([userId, isDefault])
 }
 
+/// Catalog type exposed to users (e.g. remove-background). Independent of fake AI.
+model AiOperationType {
+  id          String               @id @default(uuid()) @db.Uuid
+  slug        String               @unique @db.VarChar(100)
+  label       String               @db.VarChar(150)
+  description String?              @db.VarChar(1000)
+  isActive    Boolean              @default(true)
+  sortOrder   Int                  @default(0)
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+  variants    AiProviderVariant[]
+
+  @@index([isActive, sortOrder])
+}
+
+/// Concrete provider/model under a type. creditCostMilli uses millicredits (×1000).
+model AiProviderVariant {
+  id             String          @id @default(uuid()) @db.Uuid
+  typeId         String          @db.Uuid
+  provider       String          @db.VarChar(100)
+  externalModel  String          @db.VarChar(255)
+  label          String          @db.VarChar(150)
+  creditCostMilli Int
+  priority       Int             @default(100)
+  isDefault      Boolean         @default(false)
+  isActive       Boolean         @default(true)
+  configJson     Json?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  type           AiOperationType @relation(fields: [typeId], references: [id], onDelete: Cascade)
+  aiRequests     AiRequest[]
+
+  @@index([typeId, isActive])
+  @@index([typeId, isDefault])
+  @@index([provider])
+}
+
+/// Credit amounts on this account are millicredits (1 credit = 1000).
 model CreditAccount {
   id                String              @id @default(uuid()) @db.Uuid
   userId            String              @unique @db.Uuid

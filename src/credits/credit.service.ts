@@ -13,6 +13,7 @@ import {
 } from '@prisma/client';
 import { stablePayloadHash } from '../request-tracking/sanitizer';
 import { PrismaService } from '../prisma/prisma.service';
+import { fromMilliDisplay } from './credit-units';
 
 type Tx = Omit<
   PrismaClient,
@@ -49,12 +50,17 @@ export class CreditService {
   async getBalance(userId: string) {
     const account = await this.getOrCreateAccount(userId);
     return {
-      available: account.availableBalance,
-      reserved: account.reservedBalance,
-      total: account.availableBalance + account.reservedBalance,
-      lifetimePurchased: account.lifetimePurchased,
-      lifetimeConsumed: account.lifetimeConsumed,
+      available: fromMilliDisplay(account.availableBalance),
+      reserved: fromMilliDisplay(account.reservedBalance),
+      total: fromMilliDisplay(
+        account.availableBalance + account.reservedBalance,
+      ),
+      lifetimePurchased: fromMilliDisplay(account.lifetimePurchased),
+      lifetimeConsumed: fromMilliDisplay(account.lifetimeConsumed),
       version: account.version,
+      /** Millicredit raw fields for internal/debug use */
+      availableMilli: account.availableBalance,
+      reservedMilli: account.reservedBalance,
     };
   }
   grantCredits(

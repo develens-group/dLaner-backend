@@ -58,6 +58,7 @@ class Environment {
   @IsInt() @Min(0) AI_CREDIT_PER_1K_OUTPUT_TOKENS = 2;
   @IsIn(['true', 'false']) AI_MOCK_PROVIDER_ENABLED = 'true';
   @IsString() AI_CREDENTIALS_ENCRYPTION_KEY = '';
+  @IsString() REPLICATE_API_TOKEN = '';
   @IsIn(['local', 's3']) TEMPLATE_STORAGE_DRIVER = 'local';
   @IsString() TEMPLATE_STORAGE_LOCAL_PATH = '.data/templates';
   @IsString() TEMPLATE_LIBRARY_TYPE = 'dlanderlib';

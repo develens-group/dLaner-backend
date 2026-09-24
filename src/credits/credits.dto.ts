@@ -10,6 +10,7 @@ import {
   IsDateString,
   IsEnum,
   IsInt,
+  IsNumber,
   IsOptional,
   IsString,
   IsUUID,
@@ -101,10 +102,15 @@ export class IdempotencyDto {
   idempotencyKey!: string;
 }
 export class AdjustmentDto extends IdempotencyDto {
-  @ApiProperty({ example: 100, minimum: 1, type: Number })
+  @ApiProperty({
+    example: 0.002,
+    minimum: 0.001,
+    type: Number,
+    description: 'Credits with up to 3 decimal places',
+  })
   @Type(() => Number)
-  @IsInt()
-  @Min(1)
+  @IsNumber({ maxDecimalPlaces: 3 })
+  @Min(0.001)
   amount!: number;
   @ApiProperty({
     example: 'Promotional credit grant',
@@ -121,10 +127,15 @@ export class AdjustmentDto extends IdempotencyDto {
   externalReference?: string;
 }
 export class RefundDto extends IdempotencyDto {
-  @ApiProperty({ example: 100, minimum: 1, type: Number })
+  @ApiProperty({
+    example: 0.002,
+    minimum: 0.001,
+    type: Number,
+    description: 'Credits with up to 3 decimal places',
+  })
   @Type(() => Number)
-  @IsInt()
-  @Min(1)
+  @IsNumber({ maxDecimalPlaces: 3 })
+  @Min(0.001)
   amount!: number;
   @ApiProperty({
     example: 'Customer refund request',
@@ -155,14 +166,25 @@ export class CreditPackageDto {
   @IsString()
   @Length(1, 1000)
   description?: string;
-  @ApiProperty({ example: 1000, minimum: 1, type: Number })
+  @ApiProperty({
+    example: 1.5,
+    minimum: 0.001,
+    type: Number,
+    description: 'Package credits (up to 3 decimals)',
+  })
   @Type(() => Number)
-  @IsInt()
-  @Min(1)
+  @IsNumber({ maxDecimalPlaces: 3 })
+  @Min(0.001)
   creditAmount!: number;
-  @ApiProperty({ example: 100, default: 0, minimum: 0, type: Number })
+  @ApiProperty({
+    example: 0.1,
+    default: 0,
+    minimum: 0,
+    type: Number,
+    description: 'Bonus credits (up to 3 decimals)',
+  })
   @Type(() => Number)
-  @IsInt()
+  @IsNumber({ maxDecimalPlaces: 3 })
   @Min(0)
   bonusCreditAmount = 0;
   @ApiProperty({ example: 9900, minimum: 0, type: Number })

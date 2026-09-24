@@ -28,6 +28,20 @@ import {
   UpdateCreditPackageDto,
 } from './credits.dto';
 import { CreditService } from './credit.service';
+import { fromMilliDisplay, toMilli } from './credit-units';
+
+function serializePackage<T extends {
+  creditAmount: number;
+  bonusCreditAmount: number;
+}>(pkg: T) {
+  return {
+    ...pkg,
+    creditAmount: fromMilliDisplay(pkg.creditAmount),
+    bonusCreditAmount: fromMilliDisplay(pkg.bonusCreditAmount),
+    creditAmountMilli: pkg.creditAmount,
+    bonusCreditAmountMilli: pkg.bonusCreditAmount,
+  };
+}
 
 @Injectable()
 export class CreditCommerceService {
@@ -41,7 +55,7 @@ export class CreditCommerceService {
   async packages(admin = false) {
     if (!admin && !this.purchaseEnabled()) return [];
     const now = new Date();
-    return this.prisma.creditPackage.findMany({
+    const rows = await this.prisma.creditPackage.findMany({
       where: admin
         ? {}
         : {
@@ -54,27 +68,41 @@ export class CreditCommerceService {
           },
       orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
     });
+    return rows.map(serializePackage);
   }
   createPackage(dto: CreditPackageDto) {
-    return this.prisma.creditPackage.create({
-      data: {
-        ...dto,
-        startsAt: dto.startsAt ? new Date(dto.startsAt) : undefined,
-        endsAt: dto.endsAt ? new Date(dto.endsAt) : undefined,
-      },
-    });
+    return this.prisma.creditPackage
+      .create({
+        data: {
+          ...dto,
+          creditAmount: toMilli(dto.creditAmount),
+          bonusCreditAmount: toMilli(dto.bonusCreditAmount ?? 0),
+          startsAt: dto.startsAt ? new Date(dto.startsAt) : undefined,
+          endsAt: dto.endsAt ? new Date(dto.endsAt) : undefined,
+        },
+      })
+      .then(serializePackage);
   }
   updatePackage(id: string, dto: UpdateCreditPackageDto) {
-    return this.prisma.creditPackage.update({
-      where: { id },
-      data: dto,
-    });
+    const data: Record<string, unknown> = { ...dto };
+    if (dto.creditAmount !== undefined)
+      data.creditAmount = toMilli(dto.creditAmount);
+    if (dto.bonusCreditAmount !== undefined)
+      data.bonusCreditAmount = toMilli(dto.bonusCreditAmount);
+    return this.prisma.creditPackage
+      .update({
+        where: { id },
+        data,
+      })
+      .then(serializePackage);
   }
   deletePackage(id: string) {
-    return this.prisma.creditPackage.update({
-      where: { id },
-      data: { isActive: false, deletedAt: new Date() },
-    });
+    return this.prisma.creditPackage
+      .update({
+        where: { id },
+        data: { isActive: false, deletedAt: new Date() },
+      })
+      .then(serializePackage);
   }
   async createOrder(userId: string, packageId: string, key: string) {
     this.assertPurchaseEnabled();

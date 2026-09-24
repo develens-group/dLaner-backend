@@ -2,11 +2,22 @@ import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AiExecutionResult } from '../ai/ai-provider';
 import { CreateAiRequestDto } from '../ai/ai.dto';
+import { toMilli } from './credit-units';
 
 @Injectable()
 export class CreditCostCalculator {
   constructor(private readonly config: ConfigService) {}
+
+  /** Returns millicredits. Env unit costs are whole credits. */
   estimate(request: CreateAiRequestDto) {
+    return toMilli(this.estimateWhole(request));
+  }
+
+  actual(request: CreateAiRequestDto, result: AiExecutionResult) {
+    return toMilli(this.actualWhole(request, result));
+  }
+
+  private estimateWhole(request: CreateAiRequestDto) {
     const fixed = this.config.get<number>('AI_CREDIT_FIXED_COST', 1);
     const unitBytes = this.config.get<number>(
       'AI_CREDIT_INPUT_UNIT_BYTES',
@@ -16,7 +27,8 @@ export class CreditCostCalculator {
     const bytes = Buffer.byteLength(JSON.stringify(request.input));
     return Math.max(1, fixed + Math.ceil(bytes / unitBytes) * perUnit);
   }
-  actual(request: CreateAiRequestDto, result: AiExecutionResult) {
+
+  private actualWhole(request: CreateAiRequestDto, result: AiExecutionResult) {
     if (this.config.get('AI_CREDIT_TOKEN_PRICING_ENABLED', 'false') === 'true') {
       const fixed = this.config.get<number>('AI_CREDIT_FIXED_COST', 1);
       const inputRate = this.config.get<number>(
@@ -34,7 +46,7 @@ export class CreditCostCalculator {
         Math.ceil(completionTokens / 1000) * outputRate;
       return Math.max(1, fixed + tokenCost);
     }
-    const estimate = this.estimate(request);
+    const estimate = this.estimateWhole(request);
     const outputUnitBytes = this.config.get<number>(
       'AI_CREDIT_OUTPUT_UNIT_BYTES',
       4096,

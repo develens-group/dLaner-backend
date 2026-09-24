@@ -127,7 +127,7 @@ describe('FakeAiService', () => {
     });
     expect(credits.reserveCredits).toHaveBeenCalledWith(
       'user-1',
-      2,
+      2000,
       expect.stringMatching(/^fake-ai:/),
       'FAKE_AI_REQUEST',
       expect.any(String),
@@ -135,7 +135,7 @@ describe('FakeAiService', () => {
     expect(credits.captureReservation).toHaveBeenCalledWith(
       'user-1',
       'res-1',
-      2,
+      2000,
       expect.stringMatching(/:capture$/),
     );
     expect(result.type).toBe('remove-background');
