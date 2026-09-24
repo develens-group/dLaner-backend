@@ -103,15 +103,11 @@ export class IdempotencyDto {
 }
 export class AdjustmentDto extends IdempotencyDto {
   @ApiProperty({
-    example: 0.002,
-    minimum: 0.001,
-    type: Number,
-    description: 'Credits with up to 3 decimal places',
+    example: '0.000000123456',
+    description:
+      'Credits as number or decimal string (up to 18 fraction digits; prefer string for long values)',
   })
-  @Type(() => Number)
-  @IsNumber({ maxDecimalPlaces: 3 })
-  @Min(0.001)
-  amount!: number;
+  amount!: number | string;
   @ApiProperty({
     example: 'Promotional credit grant',
     minLength: 3,
@@ -128,15 +124,11 @@ export class AdjustmentDto extends IdempotencyDto {
 }
 export class RefundDto extends IdempotencyDto {
   @ApiProperty({
-    example: 0.002,
-    minimum: 0.001,
-    type: Number,
-    description: 'Credits with up to 3 decimal places',
+    example: '0.000000123456',
+    description:
+      'Credits as number or decimal string (up to 18 fraction digits; prefer string for long values)',
   })
-  @Type(() => Number)
-  @IsNumber({ maxDecimalPlaces: 3 })
-  @Min(0.001)
-  amount!: number;
+  amount!: number | string;
   @ApiProperty({
     example: 'Customer refund request',
     minLength: 3,
@@ -167,26 +159,16 @@ export class CreditPackageDto {
   @Length(1, 1000)
   description?: string;
   @ApiProperty({
-    example: 1.5,
-    minimum: 0.001,
-    type: Number,
-    description: 'Package credits (up to 3 decimals)',
+    example: '1.5',
+    description: 'Package credits (number or decimal string, up to 18 places)',
   })
-  @Type(() => Number)
-  @IsNumber({ maxDecimalPlaces: 3 })
-  @Min(0.001)
-  creditAmount!: number;
+  creditAmount!: number | string;
   @ApiProperty({
-    example: 0.1,
+    example: '0.1',
     default: 0,
-    minimum: 0,
-    type: Number,
-    description: 'Bonus credits (up to 3 decimals)',
+    description: 'Bonus credits (number or decimal string, up to 18 places)',
   })
-  @Type(() => Number)
-  @IsNumber({ maxDecimalPlaces: 3 })
-  @Min(0)
-  bonusCreditAmount = 0;
+  bonusCreditAmount: number | string = 0;
   @ApiProperty({ example: 9900, minimum: 0, type: Number })
   @Type(() => Number)
   @IsInt()

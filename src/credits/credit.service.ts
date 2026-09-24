@@ -13,25 +13,30 @@ import {
 } from '@prisma/client';
 import { stablePayloadHash } from '../request-tracking/sanitizer';
 import { PrismaService } from '../prisma/prisma.service';
-import { fromMilliDisplay } from './credit-units';
+import {
+  creditDecimal,
+  formatCreditAmount,
+  parseCreditAmount,
+} from './credit-units';
 
 type Tx = Omit<
   PrismaClient,
   '$connect' | '$disconnect' | '$on' | '$transaction' | '$use' | '$extends'
 >;
+type CreditAmount = Prisma.Decimal | number | string;
 interface Mutation {
   userId: string;
-  amount: number;
-  availableDelta: number;
-  reservedDelta: number;
+  amount: Prisma.Decimal;
+  availableDelta: Prisma.Decimal;
+  reservedDelta: Prisma.Decimal;
   type: CreditLedgerType;
   idempotencyKey: string;
   referenceType: string;
   referenceId?: string;
   description?: string;
   createdByUserId?: string;
-  lifetimePurchasedDelta?: number;
-  lifetimeConsumedDelta?: number;
+  lifetimePurchasedDelta?: Prisma.Decimal;
+  lifetimeConsumedDelta?: Prisma.Decimal;
 }
 
 @Injectable()
@@ -49,23 +54,21 @@ export class CreditService {
   }
   async getBalance(userId: string) {
     const account = await this.getOrCreateAccount(userId);
+    const total = creditDecimal(account.availableBalance).add(
+      account.reservedBalance,
+    );
     return {
-      available: fromMilliDisplay(account.availableBalance),
-      reserved: fromMilliDisplay(account.reservedBalance),
-      total: fromMilliDisplay(
-        account.availableBalance + account.reservedBalance,
-      ),
-      lifetimePurchased: fromMilliDisplay(account.lifetimePurchased),
-      lifetimeConsumed: fromMilliDisplay(account.lifetimeConsumed),
+      available: formatCreditAmount(account.availableBalance),
+      reserved: formatCreditAmount(account.reservedBalance),
+      total: formatCreditAmount(total),
+      lifetimePurchased: formatCreditAmount(account.lifetimePurchased),
+      lifetimeConsumed: formatCreditAmount(account.lifetimeConsumed),
       version: account.version,
-      /** Millicredit raw fields for internal/debug use */
-      availableMilli: account.availableBalance,
-      reservedMilli: account.reservedBalance,
     };
   }
   grantCredits(
     userId: string,
-    amount: number,
+    amount: CreditAmount,
     key: string,
     referenceType: string,
     referenceId?: string,
@@ -73,33 +76,36 @@ export class CreditService {
     description?: string,
     purchase = false,
   ) {
+    const amt = parseCreditAmount(amount);
+    const zero = new Prisma.Decimal(0);
     return this.mutate({
       userId,
-      amount,
-      availableDelta: amount,
-      reservedDelta: 0,
+      amount: amt,
+      availableDelta: amt,
+      reservedDelta: zero,
       type: purchase ? CreditLedgerType.PURCHASE : CreditLedgerType.ADMIN_GRANT,
       idempotencyKey: key,
       referenceType,
       referenceId,
       createdByUserId: actorId,
       description,
-      lifetimePurchasedDelta: purchase ? amount : 0,
+      lifetimePurchasedDelta: purchase ? amt : zero,
     });
   }
   deductCredits(
     userId: string,
-    amount: number,
+    amount: CreditAmount,
     key: string,
     actorId: string,
     description: string,
     referenceId?: string,
   ) {
+    const amt = parseCreditAmount(amount);
     return this.mutate({
       userId,
-      amount,
-      availableDelta: -amount,
-      reservedDelta: 0,
+      amount: amt,
+      availableDelta: amt.neg(),
+      reservedDelta: new Prisma.Decimal(0),
       type: CreditLedgerType.ADMIN_DEDUCTION,
       idempotencyKey: key,
       referenceType: 'ADMIN_ADJUSTMENT',
@@ -110,37 +116,38 @@ export class CreditService {
   }
   consumeCredits(
     userId: string,
-    amount: number,
+    amount: CreditAmount,
     key: string,
     referenceType: string,
     referenceId?: string,
   ) {
+    const amt = parseCreditAmount(amount);
     return this.mutate({
       userId,
-      amount,
-      availableDelta: -amount,
-      reservedDelta: 0,
+      amount: amt,
+      availableDelta: amt.neg(),
+      reservedDelta: new Prisma.Decimal(0),
       type: CreditLedgerType.CONSUMPTION,
       idempotencyKey: key,
       referenceType,
       referenceId,
-      lifetimeConsumedDelta: amount,
     });
   }
   refundCredits(
     userId: string,
-    amount: number,
+    amount: CreditAmount,
     key: string,
     actorId: string | undefined,
     referenceType: string,
     referenceId: string,
     description?: string,
   ) {
+    const amt = parseCreditAmount(amount);
     return this.mutate({
       userId,
-      amount,
-      availableDelta: amount,
-      reservedDelta: 0,
+      amount: amt,
+      availableDelta: amt,
+      reservedDelta: new Prisma.Decimal(0),
       type: CreditLedgerType.REFUND,
       idempotencyKey: key,
       referenceType,
@@ -152,13 +159,17 @@ export class CreditService {
   async refundPurchase(
     userId: string,
     orderId: string,
-    amount: number,
+    amount: CreditAmount,
     key: string,
     actorId: string,
     description: string,
   ) {
-    this.assertAmount(amount);
-    const requestHash = stablePayloadHash({ orderId, amount });
+    const amt = parseCreditAmount(amount);
+    this.assertAmount(amt);
+    const requestHash = stablePayloadHash({
+      orderId,
+      amount: amt.toString(),
+    });
     return this.serializable(async (tx) => {
       const prior = await tx.creditLedgerEntry.findUnique({
         where: {
@@ -191,8 +202,8 @@ export class CreditService {
         },
         _sum: { amount: true },
       });
-      const alreadyRefunded = refunded._sum.amount ?? 0;
-      if (alreadyRefunded + amount > order.totalCreditAmount)
+      const alreadyRefunded = creditDecimal(refunded._sum.amount ?? 0);
+      if (alreadyRefunded.add(amt).greaterThan(order.totalCreditAmount))
         throw new UnprocessableEntityException(
           'Refund exceeds purchased credits',
         );
@@ -200,7 +211,7 @@ export class CreditService {
       const changed = await tx.creditAccount.updateMany({
         where: { id: account.id, version: account.version },
         data: {
-          availableBalance: { increment: amount },
+          availableBalance: { increment: amt },
           version: { increment: 1 },
         },
       });
@@ -211,10 +222,12 @@ export class CreditService {
           accountId: account.id,
           userId,
           type: CreditLedgerType.REFUND,
-          amount,
-          availableDelta: amount,
-          reservedDelta: 0,
-          availableBalanceAfter: account.availableBalance + amount,
+          amount: amt,
+          availableDelta: amt,
+          reservedDelta: new Prisma.Decimal(0),
+          availableBalanceAfter: creditDecimal(account.availableBalance).add(
+            amt,
+          ),
           reservedBalanceAfter: account.reservedBalance,
           referenceType: 'CREDIT_ORDER',
           referenceId: orderId,
@@ -224,7 +237,7 @@ export class CreditService {
           createdByUserId: actorId,
         },
       });
-      if (alreadyRefunded + amount === order.totalCreditAmount)
+      if (alreadyRefunded.add(amt).equals(order.totalCreditAmount))
         await tx.creditPurchaseOrder.update({
           where: { id: orderId },
           data: { status: 'REFUNDED' },
@@ -276,8 +289,9 @@ export class CreditService {
           amount: order.totalCreditAmount,
           availableDelta: order.totalCreditAmount,
           reservedDelta: 0,
-          availableBalanceAfter:
-            account.availableBalance + order.totalCreditAmount,
+          availableBalanceAfter: creditDecimal(account.availableBalance).add(
+            order.totalCreditAmount,
+          ),
           reservedBalanceAfter: account.reservedBalance,
           referenceType: 'CREDIT_ORDER',
           referenceId: order.id,
@@ -307,14 +321,15 @@ export class CreditService {
   }
   async reserveCredits(
     userId: string,
-    amount: number,
+    amount: CreditAmount,
     key: string,
     referenceType: string,
     referenceId: string,
   ) {
-    this.assertAmount(amount);
+    const amt = parseCreditAmount(amount);
+    this.assertAmount(amt);
     const requestHash = stablePayloadHash({
-      amount,
+      amount: amt.toString(),
       referenceType,
       referenceId,
     });
@@ -332,11 +347,11 @@ export class CreditService {
         where: {
           id: account.id,
           version: account.version,
-          availableBalance: { gte: amount },
+          availableBalance: { gte: amt },
         },
         data: {
-          availableBalance: { decrement: amount },
-          reservedBalance: { increment: amount },
+          availableBalance: { decrement: amt },
+          reservedBalance: { increment: amt },
           version: { increment: 1 },
         },
       });
@@ -348,7 +363,7 @@ export class CreditService {
         data: {
           accountId: account.id,
           userId,
-          amount,
+          amount: amt,
           idempotencyKey: key,
           requestHash,
           referenceType,
@@ -365,11 +380,15 @@ export class CreditService {
           accountId: account.id,
           userId,
           type: CreditLedgerType.RESERVATION,
-          amount,
-          availableDelta: -amount,
-          reservedDelta: amount,
-          availableBalanceAfter: account.availableBalance - amount,
-          reservedBalanceAfter: account.reservedBalance + amount,
+          amount: amt,
+          availableDelta: amt.neg(),
+          reservedDelta: amt,
+          availableBalanceAfter: creditDecimal(account.availableBalance).sub(
+            amt,
+          ),
+          reservedBalanceAfter: creditDecimal(account.reservedBalance).add(
+            amt,
+          ),
           referenceType: 'CREDIT_RESERVATION',
           referenceId: reservation.id,
           idempotencyKey: key,
@@ -382,11 +401,15 @@ export class CreditService {
   async captureReservation(
     userId: string,
     reservationId: string,
-    actualAmount: number,
+    actualAmount: CreditAmount,
     key: string,
   ) {
-    this.assertAmount(actualAmount);
-    const requestHash = stablePayloadHash({ reservationId, actualAmount });
+    const amt = parseCreditAmount(actualAmount);
+    this.assertAmount(amt);
+    const requestHash = stablePayloadHash({
+      reservationId,
+      actualAmount: amt.toString(),
+    });
     return this.serializable(async (tx) => {
       const prior = await tx.creditLedgerEntry.findUnique({
         where: {
@@ -413,9 +436,9 @@ export class CreditService {
         throw new ConflictException('Reservation is no longer active');
       if (reservation.expiresAt && reservation.expiresAt <= new Date())
         throw new ConflictException('Reservation has expired');
-      if (actualAmount > reservation.amount)
+      if (amt.greaterThan(reservation.amount))
         throw new UnprocessableEntityException('Capture exceeds reservation');
-      const remainder = reservation.amount - actualAmount;
+      const remainder = creditDecimal(reservation.amount).sub(amt);
       const changed = await tx.creditAccount.updateMany({
         where: {
           id: reservation.accountId,
@@ -425,22 +448,23 @@ export class CreditService {
         data: {
           reservedBalance: { decrement: reservation.amount },
           availableBalance: { increment: remainder },
-          lifetimeConsumed: { increment: actualAmount },
+          lifetimeConsumed: { increment: amt },
           version: { increment: 1 },
         },
       });
       if (!changed.count)
         throw new ConflictException('Concurrent credit operation; retry');
-      const intermediateReserved =
-        reservation.account.reservedBalance - actualAmount;
+      const intermediateReserved = creditDecimal(
+        reservation.account.reservedBalance,
+      ).sub(amt);
       await tx.creditLedgerEntry.create({
         data: {
           accountId: reservation.accountId,
           userId,
           type: CreditLedgerType.RESERVATION_CAPTURE,
-          amount: actualAmount,
-          availableDelta: 0,
-          reservedDelta: -actualAmount,
+          amount: amt,
+          availableDelta: new Prisma.Decimal(0),
+          reservedDelta: amt.neg(),
           availableBalanceAfter: reservation.account.availableBalance,
           reservedBalanceAfter: intermediateReserved,
           referenceType: 'CREDIT_RESERVATION',
@@ -449,7 +473,7 @@ export class CreditService {
           requestHash,
         },
       });
-      if (remainder > 0)
+      if (remainder.greaterThan(0))
         await tx.creditLedgerEntry.create({
           data: {
             accountId: reservation.accountId,
@@ -457,11 +481,13 @@ export class CreditService {
             type: CreditLedgerType.RESERVATION_RELEASE,
             amount: remainder,
             availableDelta: remainder,
-            reservedDelta: -remainder,
-            availableBalanceAfter:
-              reservation.account.availableBalance + remainder,
-            reservedBalanceAfter:
-              reservation.account.reservedBalance - reservation.amount,
+            reservedDelta: remainder.neg(),
+            availableBalanceAfter: creditDecimal(
+              reservation.account.availableBalance,
+            ).add(remainder),
+            reservedBalanceAfter: creditDecimal(
+              reservation.account.reservedBalance,
+            ).sub(reservation.amount),
             referenceType: 'CREDIT_RESERVATION',
             referenceId: reservation.id,
             idempotencyKey: `${key}:remainder`,
@@ -472,9 +498,9 @@ export class CreditService {
         where: { id: reservation.id },
         data: {
           status: CreditReservationStatus.CAPTURED,
-          capturedAmount: actualAmount,
+          capturedAmount: amt,
           capturedAt: new Date(),
-          releasedAt: remainder ? new Date() : undefined,
+          releasedAt: remainder.greaterThan(0) ? new Date() : undefined,
         },
       });
     });
@@ -526,11 +552,13 @@ export class CreditService {
           type: CreditLedgerType.RESERVATION_RELEASE,
           amount: reservation.amount,
           availableDelta: reservation.amount,
-          reservedDelta: -reservation.amount,
-          availableBalanceAfter:
-            reservation.account.availableBalance + reservation.amount,
-          reservedBalanceAfter:
-            reservation.account.reservedBalance - reservation.amount,
+          reservedDelta: creditDecimal(reservation.amount).neg(),
+          availableBalanceAfter: creditDecimal(
+            reservation.account.availableBalance,
+          ).add(reservation.amount),
+          reservedBalanceAfter: creditDecimal(
+            reservation.account.reservedBalance,
+          ).sub(reservation.amount),
           referenceType: 'CREDIT_RESERVATION',
           referenceId: reservation.id,
           idempotencyKey: key,
@@ -557,12 +585,12 @@ export class CreditService {
       _sum: { availableDelta: true, reservedDelta: true },
     });
     const calculated = {
-      available: sums._sum.availableDelta ?? 0,
-      reserved: sums._sum.reservedDelta ?? 0,
+      available: creditDecimal(sums._sum.availableDelta ?? 0),
+      reserved: creditDecimal(sums._sum.reservedDelta ?? 0),
     };
     const matches =
-      calculated.available === account.availableBalance &&
-      calculated.reserved === account.reservedBalance;
+      calculated.available.equals(account.availableBalance) &&
+      calculated.reserved.equals(account.reservedBalance);
     if (repair && !matches) {
       if (!actorId)
         throw new ConflictException('Repair requires an administrator');
@@ -631,9 +659,9 @@ export class CreditService {
   private async mutate(input: Mutation) {
     this.assertAmount(input.amount);
     const requestHash = stablePayloadHash({
-      amount: input.amount,
-      availableDelta: input.availableDelta,
-      reservedDelta: input.reservedDelta,
+      amount: input.amount.toString(),
+      availableDelta: input.availableDelta.toString(),
+      reservedDelta: input.reservedDelta.toString(),
       referenceType: input.referenceType,
       referenceId: input.referenceId,
     });
@@ -653,17 +681,25 @@ export class CreditService {
         return prior;
       }
       const account = await this.getOrCreateAccount(input.userId, tx);
-      const nextAvailable = account.availableBalance + input.availableDelta;
-      const nextReserved = account.reservedBalance + input.reservedDelta;
-      if (nextAvailable < 0 || nextReserved < 0)
+      const nextAvailable = creditDecimal(account.availableBalance).add(
+        input.availableDelta,
+      );
+      const nextReserved = creditDecimal(account.reservedBalance).add(
+        input.reservedDelta,
+      );
+      if (nextAvailable.isNeg() || nextReserved.isNeg())
         throw new UnprocessableEntityException('Insufficient credits');
       const changed = await tx.creditAccount.updateMany({
         where: { id: account.id, version: account.version },
         data: {
           availableBalance: { increment: input.availableDelta },
           reservedBalance: { increment: input.reservedDelta },
-          lifetimePurchased: { increment: input.lifetimePurchasedDelta ?? 0 },
-          lifetimeConsumed: { increment: input.lifetimeConsumedDelta ?? 0 },
+          lifetimePurchased: {
+            increment: input.lifetimePurchasedDelta ?? new Prisma.Decimal(0),
+          },
+          lifetimeConsumed: {
+            increment: input.lifetimeConsumedDelta ?? new Prisma.Decimal(0),
+          },
           version: { increment: 1 },
         },
       });
@@ -689,12 +725,11 @@ export class CreditService {
       });
     });
   }
-  private assertAmount(amount: number) {
-    const max = this.config.get<number>(
-      'CREDIT_MAX_TRANSACTION_AMOUNT',
-      1_000_000_000,
+  private assertAmount(amount: Prisma.Decimal) {
+    const max = new Prisma.Decimal(
+      this.config.get<number>('CREDIT_MAX_TRANSACTION_AMOUNT', 1_000_000_000),
     );
-    if (!Number.isSafeInteger(amount) || amount <= 0 || amount > max)
+    if (amount.lte(0) || amount.greaterThan(max))
       throw new UnprocessableEntityException('Invalid credit amount');
   }
   private async serializable<T>(operation: (tx: Tx) => Promise<T>): Promise<T> {

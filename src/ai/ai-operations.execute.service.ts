@@ -3,7 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { AiOperation, AiRequestStatus, Prisma } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 import { CreditService } from '../credits/credit.service';
-import { fromMilliDisplay } from '../credits/credit-units';
+import { formatCreditAmount } from '../credits/credit-units';
 import { PrismaService } from '../prisma/prisma.service';
 import { AiOperationsCatalogService } from './ai-operations.catalog';
 import {
@@ -30,7 +30,7 @@ export class AiOperationsExecuteService {
     const variant = await this.catalog.resolveVariant(typeSlug, variantId);
     const chargingEnabled =
       this.config.get('AI_CREDIT_CHARGING_ENABLED', 'true') !== 'false';
-    const cost = variant.creditCostMilli;
+    const cost = variant.creditCost;
     const operationKey = `ai-op:${userId}:${randomUUID()}`;
 
     const reservation = chargingEnabled
@@ -99,7 +99,7 @@ export class AiOperationsExecuteService {
         provider: variant.provider,
         model: variant.externalModel,
         imageUrl: result.imageUrl,
-        creditCost: fromMilliDisplay(cost),
+        creditCost: formatCreditAmount(cost),
       };
     } catch (error) {
       if (reservation) {

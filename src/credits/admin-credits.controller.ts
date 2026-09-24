@@ -28,7 +28,7 @@ import {
   UpdateCreditPackageDto,
 } from './credits.dto';
 import { CreditService } from './credit.service';
-import { toMilli } from './credit-units';
+import { parseCreditAmount } from './credit-units';
 
 @ApiTags('admin-credits')
 @ApiBearerAuth()
@@ -106,7 +106,7 @@ export class AdminCreditsController {
   ) {
     const entry = await this.credits.grantCredits(
       userId,
-      toMilli(dto.amount),
+      parseCreditAmount(dto.amount),
       dto.idempotencyKey,
       'ADMIN_ADJUSTMENT',
       dto.externalReference,
@@ -123,7 +123,7 @@ export class AdminCreditsController {
   ) {
     const entry = await this.credits.deductCredits(
       userId,
-      toMilli(dto.amount),
+      parseCreditAmount(dto.amount),
       dto.idempotencyKey,
       actor.userId,
       dto.reason,
@@ -146,7 +146,7 @@ export class AdminCreditsController {
     const entry = await this.credits.refundPurchase(
       userId,
       dto.orderId,
-      toMilli(dto.amount),
+      parseCreditAmount(dto.amount),
       dto.idempotencyKey,
       actor.userId,
       dto.reason,

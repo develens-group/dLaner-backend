@@ -2,19 +2,18 @@ import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AiExecutionResult } from '../ai/ai-provider';
 import { CreateAiRequestDto } from '../ai/ai.dto';
-import { toMilli } from './credit-units';
 
 @Injectable()
 export class CreditCostCalculator {
   constructor(private readonly config: ConfigService) {}
 
-  /** Returns millicredits. Env unit costs are whole credits. */
+  /** Returns whole-credit units (may be fractional via Decimal storage). */
   estimate(request: CreateAiRequestDto) {
-    return toMilli(this.estimateWhole(request));
+    return this.estimateWhole(request);
   }
 
   actual(request: CreateAiRequestDto, result: AiExecutionResult) {
-    return toMilli(this.actualWhole(request, result));
+    return this.actualWhole(request, result);
   }
 
   private estimateWhole(request: CreateAiRequestDto) {

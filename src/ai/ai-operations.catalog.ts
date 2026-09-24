@@ -6,7 +6,10 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { fromMilliDisplay, toMilli } from '../credits/credit-units';
+import {
+  formatCreditAmount,
+  parseCreditAmount,
+} from '../credits/credit-units';
 import {
   CreateOperationTypeDto,
   CreateProviderVariantDto,
@@ -132,7 +135,7 @@ export class AiOperationsCatalogService {
   async createVariant(dto: CreateProviderVariantDto) {
     await this.requireType(dto.typeId);
     this.assertKnownProvider(dto.provider);
-    const creditCostMilli = toMilli(dto.creditCost);
+    const creditCost = parseCreditAmount(dto.creditCost);
     const created = await this.prisma.$transaction(async (tx) => {
       if (dto.isDefault) {
         await tx.aiProviderVariant.updateMany({
@@ -146,7 +149,7 @@ export class AiOperationsCatalogService {
           provider: dto.provider.trim().toLowerCase(),
           externalModel: dto.externalModel.trim(),
           label: dto.label.trim(),
-          creditCostMilli,
+          creditCost,
           priority: dto.priority ?? 100,
           isDefault: dto.isDefault ?? false,
           isActive: dto.isActive ?? true,
@@ -186,7 +189,7 @@ export class AiOperationsCatalogService {
             : {}),
           ...(dto.label !== undefined ? { label: dto.label.trim() } : {}),
           ...(dto.creditCost !== undefined
-            ? { creditCostMilli: toMilli(dto.creditCost) }
+            ? { creditCost: parseCreditAmount(dto.creditCost) }
             : {}),
           ...(dto.priority !== undefined ? { priority: dto.priority } : {}),
           ...(dto.isDefault !== undefined ? { isDefault: dto.isDefault } : {}),
@@ -282,7 +285,7 @@ export class AiOperationsCatalogService {
       throw new BadRequestException(`Unknown provider: ${provider}`);
   }
 
-  private serializeType<T extends { variants?: Array<{ creditCostMilli: number }> }>(
+  private serializeType<T extends { variants?: Array<{ creditCost: unknown }> }>(
     type: T,
   ) {
     return {
@@ -291,10 +294,10 @@ export class AiOperationsCatalogService {
     };
   }
 
-  private serializeVariant<T extends { creditCostMilli: number }>(variant: T) {
+  private serializeVariant<T extends { creditCost: unknown }>(variant: T) {
     return {
       ...variant,
-      creditCost: fromMilliDisplay(variant.creditCostMilli),
+      creditCost: formatCreditAmount(variant.creditCost as never),
     };
   }
 }

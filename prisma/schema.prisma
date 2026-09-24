@@ -415,10 +415,10 @@ model AiRequest {
   promptTokens        Int?
   completionTokens    Int?
   totalTokens         Int?
-  estimatedCreditCost Int?
-  chargedCreditAmount Int?
+  estimatedCreditCost Decimal?           @db.Decimal(36, 18)
+  chargedCreditAmount Decimal?           @db.Decimal(36, 18)
   creditReservationId String?            @db.Uuid
-  actualCreditCost    Int?
+  actualCreditCost    Decimal?           @db.Decimal(36, 18)
   creditChargedAt     DateTime?
   latencyMs           Int?
   errorCode           String?            @db.VarChar(100)
@@ -478,14 +478,14 @@ model AiOperationType {
   @@index([isActive, sortOrder])
 }
 
-/// Concrete provider/model under a type. creditCostMilli uses millicredits (×1000).
+/// Concrete provider/model under a type. creditCost is DECIMAL credits (up to 18 places).
 model AiProviderVariant {
   id             String          @id @default(uuid()) @db.Uuid
   typeId         String          @db.Uuid
   provider       String          @db.VarChar(100)
   externalModel  String          @db.VarChar(255)
   label          String          @db.VarChar(150)
-  creditCostMilli Int
+  creditCost     Decimal         @db.Decimal(36, 18)
   priority       Int             @default(100)
   isDefault      Boolean         @default(false)
   isActive       Boolean         @default(true)
@@ -500,14 +500,14 @@ model AiProviderVariant {
   @@index([provider])
 }
 
-/// Credit amounts on this account are millicredits (1 credit = 1000).
+/// Credit amounts are DECIMAL credits (arbitrary fraction up to 18 places).
 model CreditAccount {
   id                String              @id @default(uuid()) @db.Uuid
   userId            String              @unique @db.Uuid
-  availableBalance  Int                 @default(0)
-  reservedBalance   Int                 @default(0)
-  lifetimePurchased Int                 @default(0)
-  lifetimeConsumed  Int                 @default(0)
+  availableBalance  Decimal             @default(0) @db.Decimal(36, 18)
+  reservedBalance   Decimal             @default(0) @db.Decimal(36, 18)
+  lifetimePurchased Decimal             @default(0) @db.Decimal(36, 18)
+  lifetimeConsumed  Decimal             @default(0) @db.Decimal(36, 18)
   version           Int                 @default(0)
   createdAt         DateTime            @default(now())
   updatedAt         DateTime            @updatedAt
@@ -523,11 +523,11 @@ model CreditLedgerEntry {
   accountId             String           @db.Uuid
   userId                String           @db.Uuid
   type                  CreditLedgerType
-  amount                Int
-  availableDelta        Int
-  reservedDelta         Int
-  availableBalanceAfter Int
-  reservedBalanceAfter  Int
+  amount                Decimal          @db.Decimal(36, 18)
+  availableDelta        Decimal          @db.Decimal(36, 18)
+  reservedDelta         Decimal          @db.Decimal(36, 18)
+  availableBalanceAfter Decimal          @db.Decimal(36, 18)
+  reservedBalanceAfter  Decimal          @db.Decimal(36, 18)
   referenceType         String           @db.VarChar(100)
   referenceId           String?          @db.VarChar(255)
   idempotencyKey        String?          @db.VarChar(128)
@@ -551,8 +551,8 @@ model CreditReservation {
   id             String                  @id @default(uuid()) @db.Uuid
   accountId      String                  @db.Uuid
   userId         String                  @db.Uuid
-  amount         Int
-  capturedAmount Int                     @default(0)
+  amount         Decimal                 @db.Decimal(36, 18)
+  capturedAmount Decimal                 @default(0) @db.Decimal(36, 18)
   status         CreditReservationStatus @default(ACTIVE)
   referenceType  String                  @db.VarChar(100)
   referenceId    String                  @db.VarChar(255)
@@ -578,8 +578,8 @@ model CreditPackage {
   id                   String                @id @default(uuid()) @db.Uuid
   name                 String                @db.VarChar(150)
   description          String?               @db.VarChar(1000)
-  creditAmount         Int
-  bonusCreditAmount    Int                   @default(0)
+  creditAmount         Decimal               @db.Decimal(36, 18)
+  bonusCreditAmount    Decimal               @default(0) @db.Decimal(36, 18)
   priceMinor           Int
   currency             String                @db.VarChar(3)
   isActive             Boolean               @default(true)
@@ -602,9 +602,9 @@ model CreditPurchaseOrder {
   userId            String            @db.Uuid
   packageId         String            @db.Uuid
   status            CreditOrderStatus @default(CREATED)
-  creditAmount      Int
-  bonusCreditAmount Int
-  totalCreditAmount Int
+  creditAmount      Decimal           @db.Decimal(36, 18)
+  bonusCreditAmount Decimal           @db.Decimal(36, 18)
+  totalCreditAmount Decimal           @db.Decimal(36, 18)
   priceMinor        Int
   currency          String            @db.VarChar(3)
   paymentProvider   String            @db.VarChar(100)

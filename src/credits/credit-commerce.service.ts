@@ -28,18 +28,20 @@ import {
   UpdateCreditPackageDto,
 } from './credits.dto';
 import { CreditService } from './credit.service';
-import { fromMilliDisplay, toMilli } from './credit-units';
+import {
+  creditDecimal,
+  formatCreditAmount,
+  parseCreditAmount,
+} from './credit-units';
 
 function serializePackage<T extends {
-  creditAmount: number;
-  bonusCreditAmount: number;
+  creditAmount: unknown;
+  bonusCreditAmount: unknown;
 }>(pkg: T) {
   return {
     ...pkg,
-    creditAmount: fromMilliDisplay(pkg.creditAmount),
-    bonusCreditAmount: fromMilliDisplay(pkg.bonusCreditAmount),
-    creditAmountMilli: pkg.creditAmount,
-    bonusCreditAmountMilli: pkg.bonusCreditAmount,
+    creditAmount: formatCreditAmount(pkg.creditAmount as never),
+    bonusCreditAmount: formatCreditAmount(pkg.bonusCreditAmount as never),
   };
 }
 
@@ -75,8 +77,8 @@ export class CreditCommerceService {
       .create({
         data: {
           ...dto,
-          creditAmount: toMilli(dto.creditAmount),
-          bonusCreditAmount: toMilli(dto.bonusCreditAmount ?? 0),
+          creditAmount: parseCreditAmount(dto.creditAmount),
+          bonusCreditAmount: parseCreditAmount(dto.bonusCreditAmount ?? 0),
           startsAt: dto.startsAt ? new Date(dto.startsAt) : undefined,
           endsAt: dto.endsAt ? new Date(dto.endsAt) : undefined,
         },
@@ -86,9 +88,9 @@ export class CreditCommerceService {
   updatePackage(id: string, dto: UpdateCreditPackageDto) {
     const data: Record<string, unknown> = { ...dto };
     if (dto.creditAmount !== undefined)
-      data.creditAmount = toMilli(dto.creditAmount);
+      data.creditAmount = parseCreditAmount(dto.creditAmount);
     if (dto.bonusCreditAmount !== undefined)
-      data.bonusCreditAmount = toMilli(dto.bonusCreditAmount);
+      data.bonusCreditAmount = parseCreditAmount(dto.bonusCreditAmount);
     return this.prisma.creditPackage
       .update({
         where: { id },
@@ -146,7 +148,9 @@ export class CreditCommerceService {
             packageId,
             creditAmount: pkg.creditAmount,
             bonusCreditAmount: pkg.bonusCreditAmount,
-            totalCreditAmount: pkg.creditAmount + pkg.bonusCreditAmount,
+            totalCreditAmount: creditDecimal(pkg.creditAmount).add(
+              pkg.bonusCreditAmount,
+            ),
             priceMinor: pkg.priceMinor,
             currency: pkg.currency,
             paymentProvider: this.config.get('PAYMENT_PROVIDER', 'mock'),

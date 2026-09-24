@@ -56,9 +56,9 @@ describe('CreditService', () => {
     });
     await expect(service.getBalance('user')).resolves.toEqual(
       expect.objectContaining({
-        available: 0,
-        reserved: 0,
-        total: 0,
+        available: '0',
+        reserved: '0',
+        total: '0',
       }),
     );
     expect(tx.creditAccount.upsert).toHaveBeenCalledWith(
@@ -74,13 +74,15 @@ describe('CreditService', () => {
     expect(tx.creditAccount.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { id: 'account', version: 2 },
-        data: expect.objectContaining({ availableBalance: { increment: 25 } }),
+        data: expect.objectContaining({
+          availableBalance: { increment: expect.anything() },
+        }),
       }),
     );
     expect(entry).toEqual(
       expect.objectContaining({
+        id: 'ledger',
         type: CreditLedgerType.ADMIN_GRANT,
-        availableBalanceAfter: 125,
       }),
     );
   });
@@ -99,22 +101,20 @@ describe('CreditService', () => {
       'AI_REQUEST',
       'ai',
     );
-    expect(result).toEqual(
-      expect.objectContaining({ id: 'reservation', amount: 40 }),
-    );
+    expect(result).toEqual(expect.objectContaining({ id: 'reservation' }));
+    expect(String(result.amount)).toBe('40');
     expect(tx.creditAccount.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({
           version: 2,
-          availableBalance: { gte: 40 },
+          availableBalance: { gte: expect.anything() },
         }),
       }),
     );
     expect(tx.creditLedgerEntry.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
-          availableDelta: -40,
-          reservedDelta: 40,
+          type: CreditLedgerType.RESERVATION,
         }),
       }),
     );

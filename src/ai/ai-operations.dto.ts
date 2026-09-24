@@ -1,9 +1,8 @@
-import { PartialType } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional, PartialType } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
   IsBoolean,
   IsInt,
-  IsNumber,
   IsObject,
   IsOptional,
   IsString,
@@ -30,10 +29,11 @@ export class CreateProviderVariantDto {
   @IsString() @MaxLength(100) provider!: string;
   @IsString() @MaxLength(255) externalModel!: string;
   @IsString() @MaxLength(150) label!: string;
-  @Type(() => Number)
-  @IsNumber({ maxDecimalPlaces: 3 })
-  @Min(0)
-  creditCost!: number;
+  @ApiProperty({
+    example: '0.000000123',
+    description: 'Credit cost (number or decimal string, up to 18 places)',
+  })
+  creditCost!: number | string;
   @IsOptional() @Type(() => Number) @IsInt() priority?: number;
   @IsOptional() @IsBoolean() isDefault?: boolean;
   @IsOptional() @IsBoolean() isActive?: boolean;

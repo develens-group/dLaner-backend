@@ -2,11 +2,18 @@
 
 Fake AI for frontend tests remains at `/api/v1/ai/fake`.
 
-## Credits (millicredits)
+## Credits (high-precision decimal)
 
-Balances and charges are stored as integers ×1000. APIs accept/return up to **3 decimal places** (e.g. `0.002`).
+Balances and charges are stored as `DECIMAL(36, 18)`.
 
-After deploying migration `20260924120000_ai_catalog_millicredits`, existing balances are multiplied by 1000.
+- API accepts number or decimal **string** (prefer string for very long fractions).
+- Up to **18** fractional digits (database limit — not capped at 3).
+- Responses format credit fields as strings to preserve precision (e.g. `"0.000000123"`).
+
+Migrations:
+
+1. `20260924120000_ai_catalog_millicredits` — catalog + temporary ×1000 scale  
+2. `20260924180000_credits_decimal_precision` — convert to DECIMAL and undo ×1000
 
 ## Admin
 
@@ -17,13 +24,13 @@ After deploying migration `20260924120000_ai_catalog_millicredits`, existing bal
 - `POST /api/v1/admin/ai/provider-variants/:id/set-default`
 - `GET /api/v1/admin/ai/providers`
 
-Variant fields: `provider` (`replicate` implemented; `openai`/`stability` stubs), `externalModel`, `creditCost` (decimal), `priority`, `isDefault`, `configJson`.
+Variant `creditCost` is a decimal string/number (not milli).
 
 ## User
 
-- `GET /api/v1/ai/operations` — active types + variants
+- `GET /api/v1/ai/operations`
 - `POST /api/v1/ai/execute` — multipart: `type`, optional `variantId`, optional `prompt`, optional `image`
 
-On provider failure the API returns an error (credits released). Client may retry with another `variantId` of the same type. No server auto-failover.
+On provider failure credits are released; client retries with another `variantId`.
 
 Set `REPLICATE_API_TOKEN` for Replicate variants.

@@ -20,6 +20,6 @@ describe('CreditCostCalculator', () => {
       input: { prompt: '1234567890' },
     });
     expect(Number.isInteger(cost)).toBe(true);
-    expect(cost).toBeGreaterThanOrEqual(5000); // millicredits (5.000 credits)
+    expect(cost).toBeGreaterThanOrEqual(5);
   });
 });

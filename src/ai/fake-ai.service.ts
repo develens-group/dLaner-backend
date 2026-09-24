@@ -2,7 +2,6 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { randomInt, randomUUID } from 'node:crypto';
 import { CreditService } from '../credits/credit.service';
-import { toMilli } from '../credits/credit-units';
 import {
   FakeAiTypeDefinition,
   FakeAiTypeId,
@@ -58,11 +57,11 @@ export class FakeAiService {
     const { width, height } = this.resolveSize(def, input);
     const operationKey = `fake-ai:${userId}:${randomUUID()}`;
 
-    const creditCostMilli = toMilli(def.creditCost);
+    const creditCost = def.creditCost;
     const reservation = chargingEnabled
       ? await this.credits.reserveCredits(
           userId,
-          creditCostMilli,
+          creditCost,
           `${operationKey}:reserve`,
           'FAKE_AI_REQUEST',
           operationKey,
@@ -79,7 +78,7 @@ export class FakeAiService {
         await this.credits.captureReservation(
           userId,
           reservation.id,
-          creditCostMilli,
+          creditCost,
           `${operationKey}:capture`,
         );
       }
