@@ -78,23 +78,26 @@ export class ReplicateImageProvider implements ImageProviderAdapter {
     if (imageDataUrl) predictionInput[imageKey] = imageDataUrl;
     if (input.prompt) predictionInput[promptKey] = input.prompt;
 
-    const version =
+    const versionFromConfig =
       typeof config.version === 'string' ? config.version : undefined;
 
-    const { url, body } = buildReplicateCreateRequest(
+    const versionId = await this.resolveVersionId(
+      token,
       variant.externalModel,
-      version,
-      predictionInput,
+      versionFromConfig,
     );
 
-    const createRes = await fetch(url, {
+    const createRes = await fetch('https://api.replicate.com/v1/predictions', {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${token}`,
         'Content-Type': 'application/json',
         Prefer: 'wait',
       },
-      body: JSON.stringify(body),
+      body: JSON.stringify({
+        version: versionId,
+        input: predictionInput,
+      }),
     });
 
     const payload = (await createRes.json().catch(() => ({}))) as {
@@ -151,54 +154,60 @@ export class ReplicateImageProvider implements ImageProviderAdapter {
       raw: result.output,
     };
   }
-}
 
-function buildReplicateCreateRequest(
-  externalModel: string,
-  versionFromConfig: string | undefined,
-  predictionInput: Record<string, unknown>,
-): { url: string; body: Record<string, unknown> } {
-  const inputBody = { input: predictionInput };
+  /**
+   * Community models need a version hash on POST /v1/predictions.
+   * Accepts: 64-hex, owner/name:hash, owner/name (resolved via models API),
+   * or an explicit configJson.version.
+   */
+  private async resolveVersionId(
+    token: string,
+    externalModel: string,
+    versionFromConfig?: string,
+  ): Promise<string> {
+    const candidate = (versionFromConfig ?? externalModel).trim();
 
-  // Explicit version hash or owner/name:hash from admin configJson.version
-  if (versionFromConfig) {
-    return {
-      url: 'https://api.replicate.com/v1/predictions',
-      body: { ...inputBody, version: versionFromConfig },
-    };
-  }
+    if (/^[a-f0-9]{64}$/i.test(candidate)) return candidate;
 
-  const trimmed = externalModel.trim();
-  // owner/name:64hex → community model with pinned version
-  if (/^[^/]+\/[^:]+:[a-f0-9]{64}$/i.test(trimmed)) {
-    return {
-      url: 'https://api.replicate.com/v1/predictions',
-      body: { ...inputBody, version: trimmed },
-    };
-  }
-  // bare 64-char version id
-  if (/^[a-f0-9]{64}$/i.test(trimmed)) {
-    return {
-      url: 'https://api.replicate.com/v1/predictions',
-      body: { ...inputBody, version: trimmed },
-    };
-  }
-  // owner/name → models endpoint (works for community + official)
-  const parts = trimmed.split('/');
-  if (parts.length === 2 && parts[0] && parts[1]) {
-    const owner = encodeURIComponent(parts[0]);
-    const name = encodeURIComponent(parts[1]);
-    return {
-      url: `https://api.replicate.com/v1/models/${owner}/${name}/predictions`,
-      body: inputBody,
-    };
-  }
+    const withHash = /^([^/]+\/[^:]+):([a-f0-9]{64})$/i.exec(candidate);
+    if (withHash) return withHash[2];
 
-  // Fallback: treat as version identifier on unified predictions API
-  return {
-    url: 'https://api.replicate.com/v1/predictions',
-    body: { ...inputBody, version: trimmed },
-  };
+    const ownerName = /^([^/]+)\/([^/]+)$/.exec(candidate);
+    if (!ownerName) {
+      throw new BadGatewayException({
+        code: 'AI_PROVIDER_FAILED',
+        message: `Invalid Replicate model id: ${candidate}`,
+      });
+    }
+
+    const owner = encodeURIComponent(ownerName[1]);
+    const name = encodeURIComponent(ownerName[2]);
+    const res = await fetch(
+      `https://api.replicate.com/v1/models/${owner}/${name}`,
+      {
+        headers: { Authorization: `Bearer ${token}` },
+      },
+    );
+    const data = (await res.json().catch(() => ({}))) as {
+      error?: string;
+      detail?: unknown;
+      latest_version?: { id?: string };
+    };
+    if (!res.ok) {
+      throw new BadGatewayException({
+        code: 'AI_PROVIDER_FAILED',
+        message: formatReplicateError(data, res.status),
+      });
+    }
+    const id = data.latest_version?.id;
+    if (!id) {
+      throw new BadGatewayException({
+        code: 'AI_PROVIDER_FAILED',
+        message: `No latest_version for Replicate model ${candidate}`,
+      });
+    }
+    return id;
+  }
 }
 
 function formatReplicateError(
