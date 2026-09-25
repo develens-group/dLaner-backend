@@ -81,13 +81,13 @@ export class ReplicateImageProvider implements ImageProviderAdapter {
     const version =
       typeof config.version === 'string' ? config.version : undefined;
 
-    const body: Record<string, unknown> = {
-      input: predictionInput,
-    };
-    if (version) body.version = version;
-    else body.model = variant.externalModel;
+    const { url, body } = buildReplicateCreateRequest(
+      variant.externalModel,
+      version,
+      predictionInput,
+    );
 
-    const createRes = await fetch('https://api.replicate.com/v1/predictions', {
+    const createRes = await fetch(url, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${token}`,
@@ -102,13 +102,14 @@ export class ReplicateImageProvider implements ImageProviderAdapter {
       status?: string;
       output?: unknown;
       error?: string;
+      detail?: unknown;
       urls?: { get?: string };
     };
 
     if (!createRes.ok) {
       throw new BadGatewayException({
         code: 'AI_PROVIDER_FAILED',
-        message: payload.error || `Replicate HTTP ${createRes.status}`,
+        message: formatReplicateError(payload, createRes.status),
       });
     }
 
@@ -150,6 +151,80 @@ export class ReplicateImageProvider implements ImageProviderAdapter {
       raw: result.output,
     };
   }
+}
+
+function buildReplicateCreateRequest(
+  externalModel: string,
+  versionFromConfig: string | undefined,
+  predictionInput: Record<string, unknown>,
+): { url: string; body: Record<string, unknown> } {
+  const inputBody = { input: predictionInput };
+
+  // Explicit version hash or owner/name:hash from admin configJson.version
+  if (versionFromConfig) {
+    return {
+      url: 'https://api.replicate.com/v1/predictions',
+      body: { ...inputBody, version: versionFromConfig },
+    };
+  }
+
+  const trimmed = externalModel.trim();
+  // owner/name:64hex → community model with pinned version
+  if (/^[^/]+\/[^:]+:[a-f0-9]{64}$/i.test(trimmed)) {
+    return {
+      url: 'https://api.replicate.com/v1/predictions',
+      body: { ...inputBody, version: trimmed },
+    };
+  }
+  // bare 64-char version id
+  if (/^[a-f0-9]{64}$/i.test(trimmed)) {
+    return {
+      url: 'https://api.replicate.com/v1/predictions',
+      body: { ...inputBody, version: trimmed },
+    };
+  }
+  // owner/name → models endpoint (works for community + official)
+  const parts = trimmed.split('/');
+  if (parts.length === 2 && parts[0] && parts[1]) {
+    const owner = encodeURIComponent(parts[0]);
+    const name = encodeURIComponent(parts[1]);
+    return {
+      url: `https://api.replicate.com/v1/models/${owner}/${name}/predictions`,
+      body: inputBody,
+    };
+  }
+
+  // Fallback: treat as version identifier on unified predictions API
+  return {
+    url: 'https://api.replicate.com/v1/predictions',
+    body: { ...inputBody, version: trimmed },
+  };
+}
+
+function formatReplicateError(
+  payload: { error?: string; detail?: unknown },
+  status: number,
+): string {
+  if (typeof payload.error === 'string' && payload.error.trim())
+    return payload.error;
+  if (typeof payload.detail === 'string' && payload.detail.trim())
+    return payload.detail;
+  if (Array.isArray(payload.detail)) {
+    const parts = payload.detail.map((item) => {
+      if (typeof item === 'string') return item;
+      if (item && typeof item === 'object') {
+        const rec = item as Record<string, unknown>;
+        const loc = Array.isArray(rec.loc) ? rec.loc.join('.') : '';
+        const msg = typeof rec.msg === 'string' ? rec.msg : JSON.stringify(item);
+        return loc ? `${loc}: ${msg}` : msg;
+      }
+      return JSON.stringify(item);
+    });
+    if (parts.length) return parts.join('; ');
+  }
+  if (payload.detail && typeof payload.detail === 'object')
+    return JSON.stringify(payload.detail);
+  return `Replicate HTTP ${status}`;
 }
 
 function extractImageUrl(output: unknown): string | undefined {
