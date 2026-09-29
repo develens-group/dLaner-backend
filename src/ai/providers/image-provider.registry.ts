@@ -37,6 +37,18 @@ export class StubImageProvider implements ImageProviderAdapter {
   }
 }
 
+/** Our multipart field → Replicate input field for known models (when configJson.input is absent). */
+const REPLICATE_MODEL_INPUT_DEFAULTS: Record<
+  string,
+  { image?: string; prompt?: string }
+> = {
+  'prunaai/flux-kontext-fast': { image: 'img_cond_path', prompt: 'prompt' },
+  'men1scus/birefnet': { image: 'image' },
+  'nightmareai/real-esrgan': { image: 'image' },
+  'black-forest-labs/flux-schnell': { prompt: 'prompt' },
+  'prunaai/flux-fast': { prompt: 'prompt' },
+};
+
 @Injectable()
 export class ReplicateImageProvider implements ImageProviderAdapter {
   readonly id = 'replicate';
@@ -66,6 +78,8 @@ export class ReplicateImageProvider implements ImageProviderAdapter {
       config.input && typeof config.input === 'object'
         ? (config.input as Record<string, string>)
         : {};
+    const modelDefaults =
+      REPLICATE_MODEL_INPUT_DEFAULTS[variant.externalModel.trim()] ?? {};
 
     const predictionInput: Record<string, unknown> = {
       ...(typeof config.defaults === 'object' && config.defaults
@@ -73,8 +87,9 @@ export class ReplicateImageProvider implements ImageProviderAdapter {
         : {}),
     };
 
-    const imageKey = inputMap.image ?? 'image';
-    const promptKey = inputMap.prompt ?? 'prompt';
+    // configJson.input maps OUR field → Replicate field, e.g. { "image": "img_cond_path" }
+    const imageKey = inputMap.image ?? modelDefaults.image ?? 'image';
+    const promptKey = inputMap.prompt ?? modelDefaults.prompt ?? 'prompt';
     if (imageDataUrl) predictionInput[imageKey] = imageDataUrl;
     if (input.prompt) predictionInput[promptKey] = input.prompt;
 

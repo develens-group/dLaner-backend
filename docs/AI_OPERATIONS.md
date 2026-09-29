@@ -26,6 +26,25 @@ Migrations:
 
 Variant `creditCost` is a decimal string/number (not milli).
 
+### `configJson.input` mapping (important)
+
+Maps **our request fields → Replicate parameter names**:
+
+```json
+{ "input": { "image": "img_cond_path", "prompt": "prompt" } }
+```
+
+- Left key = field from our API (`image`, `prompt`)
+- Right value = field name expected by the Replicate model
+
+Example for Edit Image / `prunaai/flux-kontext-fast`:
+
+```json
+{ "input": { "image": "img_cond_path", "prompt": "prompt" } }
+```
+
+Built-in defaults exist for known models if `configJson.input` is empty. Admin override always wins.
+
 ## User
 
 - `GET /api/v1/ai/operations`
