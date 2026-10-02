@@ -29,13 +29,25 @@ export function setupApplication(app: NestExpressApplication) {
     }),
   );
   app.useGlobalFilters(new HttpExceptionFilter());
+  const corsOrigins = (
+    config.get<string>('CORS_ORIGINS') ??
+    config.getOrThrow<string>('FRONTEND_URL')
+  )
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean);
   app.enableCors({
-    origin: config
-      .get<string>('CORS_ORIGINS', config.getOrThrow<string>('FRONTEND_URL'))
-      .split(',')
-      .map((origin) => origin.trim()),
+    origin: corsOrigins,
     credentials: true,
-    methods: ['GET', 'POST', 'PATCH', 'DELETE'],
+    methods: ['GET', 'HEAD', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: [
+      'Content-Type',
+      'Authorization',
+      'Idempotency-Key',
+      'Accept',
+      'Origin',
+      'X-Requested-With',
+    ],
   });
   const swaggerConfig = new DocumentBuilder()
     .setTitle('Dlander API')
