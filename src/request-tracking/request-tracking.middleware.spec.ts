@@ -35,4 +35,46 @@ describe('request ID handling', () => {
     );
     expect(next).toHaveBeenCalledTimes(1);
   });
+  it('does not enqueue the access-log timestamp', () => {
+    const enqueue = jest.fn();
+    const middleware = new RequestTrackingMiddleware(
+      { enqueue } as never,
+      new ConfigService(),
+    );
+    let finish: (() => void) | undefined;
+    const request = {
+      get: jest.fn((header: string) =>
+        header === 'x-request-id' ? 'client-request_123' : undefined,
+      ),
+      method: 'GET',
+      originalUrl: '/api/v1/test?value=1',
+      path: '/api/v1/test',
+      baseUrl: '/api/v1',
+      route: { path: '/test' },
+      query: { value: '1' },
+      body: undefined,
+      ip: '127.0.0.1',
+    };
+    const response = {
+      locals: {},
+      statusCode: 200,
+      setHeader: jest.fn(),
+      getHeader: jest.fn(),
+      once: jest.fn((_event: string, callback: () => void) => {
+        finish = callback;
+      }),
+    };
+
+    middleware.use(request as never, response as never, jest.fn());
+    finish?.();
+
+    expect(enqueue).toHaveBeenCalledWith(
+      expect.objectContaining({
+        requestId: 'client-request_123',
+        route: '/api/v1/test',
+        path: '/api/v1/test',
+      }),
+    );
+    expect(enqueue.mock.calls[0][0]).not.toHaveProperty('timestamp');
+  });
 });

@@ -85,6 +85,7 @@ export class RequestPersistenceService implements OnApplicationShutdown {
               requestId: record.requestId,
               attempts: attempt,
               error: error instanceof Error ? error.name : 'UnknownError',
+              message: error instanceof Error ? error.message : 'Unknown error',
             }),
           );
           return;

@@ -66,8 +66,19 @@ export class RequestTrackingMiddleware implements NestMiddleware {
       this.logger.log(JSON.stringify(log));
       if (!excluded(req))
         this.persistence.enqueue({
-          ...log,
+          requestId: log.requestId,
+          method: log.method,
+          route: log.route,
           path: log.path.slice(0, 2048),
+          statusCode: log.statusCode,
+          durationMs: log.durationMs,
+          userId: log.userId,
+          sessionId: log.sessionId,
+          ipAddress: log.ipAddress,
+          userAgent: log.userAgent,
+          contentLength: log.contentLength,
+          responseLength: log.responseLength,
+          errorCode: log.errorCode,
           queryJson: query.value as Prisma.InputJsonValue,
           requestBodyJson: body.value === null ? undefined : body.value,
           bodyCaptured: body.captured,

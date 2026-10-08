@@ -10,7 +10,6 @@ import {
   IsDateString,
   IsEnum,
   IsInt,
-  IsNumber,
   IsOptional,
   IsString,
   IsUUID,
@@ -18,7 +17,23 @@ import {
   Matches,
   Max,
   Min,
+  Validate,
+  ValidatorConstraint,
+  ValidatorConstraintInterface,
 } from 'class-validator';
+import { parseCreditAmount } from './credit-units';
+
+@ValidatorConstraint({ name: 'isCreditAmount', async: false })
+class IsCreditAmountConstraint implements ValidatorConstraintInterface {
+  validate(value: unknown) {
+    try {
+      parseCreditAmount(value);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+}
 
 export class CursorDto {
   @ApiPropertyOptional({
@@ -107,6 +122,7 @@ export class AdjustmentDto extends IdempotencyDto {
     description:
       'Credits as number or decimal string (up to 18 fraction digits; prefer string for long values)',
   })
+  @Validate(IsCreditAmountConstraint)
   amount!: number | string;
   @ApiProperty({
     example: 'Promotional credit grant',
@@ -128,6 +144,7 @@ export class RefundDto extends IdempotencyDto {
     description:
       'Credits as number or decimal string (up to 18 fraction digits; prefer string for long values)',
   })
+  @Validate(IsCreditAmountConstraint)
   amount!: number | string;
   @ApiProperty({
     example: 'Customer refund request',
@@ -162,12 +179,14 @@ export class CreditPackageDto {
     example: '1.5',
     description: 'Package credits (number or decimal string, up to 18 places)',
   })
+  @Validate(IsCreditAmountConstraint)
   creditAmount!: number | string;
   @ApiProperty({
     example: '0.1',
     default: 0,
     description: 'Bonus credits (number or decimal string, up to 18 places)',
   })
+  @Validate(IsCreditAmountConstraint)
   bonusCreditAmount: number | string = 0;
   @ApiProperty({ example: 9900, minimum: 0, type: Number })
   @Type(() => Number)
