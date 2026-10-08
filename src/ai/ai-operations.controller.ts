@@ -26,6 +26,7 @@ class ExecuteOperationDto {
   @IsString() @MaxLength(100) type!: string;
   @IsOptional() @IsUUID() variantId?: string;
   @IsOptional() @IsString() @MaxLength(2000) prompt?: string;
+  @IsOptional() @IsUUID() credentialId?: string;
 }
 
 @ApiTags('ai-operations')
@@ -52,6 +53,12 @@ export class AiOperationsController {
         type: { type: 'string' },
         variantId: { type: 'string', format: 'uuid' },
         prompt: { type: 'string' },
+        credentialId: {
+          type: 'string',
+          format: 'uuid',
+          description:
+            'Optional BYOK credential (openai image variants only); skips platform credits',
+        },
         image: { type: 'string', format: 'binary' },
       },
     },
@@ -68,10 +75,13 @@ export class AiOperationsController {
     @UploadedFile() image?: Express.Multer.File,
   ) {
     return response(
-      await this.executeService.execute(user.userId, dto.type, dto.variantId, {
-        image,
-        prompt: dto.prompt,
-      }),
+      await this.executeService.execute(
+        user.userId,
+        dto.type,
+        dto.variantId,
+        { image, prompt: dto.prompt },
+        dto.credentialId,
+      ),
     );
   }
 }

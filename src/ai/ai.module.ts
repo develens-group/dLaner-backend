@@ -26,6 +26,7 @@ import {
   ImageProviderRegistry,
   ReplicateImageProvider,
 } from './providers/image-provider.registry';
+import { OpenAiImageProvider } from './providers/openai-image.provider';
 import { OpenAiProvider } from './providers/openai.provider';
 
 @Module({
@@ -49,6 +50,7 @@ import { OpenAiProvider } from './providers/openai.provider';
     AiOperationsCatalogService,
     AiOperationsExecuteService,
     ReplicateImageProvider,
+    OpenAiImageProvider,
     ImageProviderRegistry,
     {
       provide: AI_HISTORY_STORE,

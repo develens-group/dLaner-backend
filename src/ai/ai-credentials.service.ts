@@ -76,6 +76,21 @@ export class AiCredentialsService {
     return { deleted: true };
   }
 
+  async testConnection(userId: string, id: string) {
+    const credential = await this.owned(userId, id);
+    if (credential.status !== AiCredentialStatus.ACTIVE) {
+      throw new BadRequestException('Credential is not ACTIVE');
+    }
+    // Prove decrypt works; do not return the secret
+    decryptSecret(credential.apiKeyEnc, this.encryptionKey());
+    return {
+      ok: true as const,
+      mode: 'resolve' as const,
+      provider: credential.provider,
+      keyHint: credential.keyHint,
+    };
+  }
+
   async resolveForRequest(userId: string, credentialId: string, provider: string) {
     const credential = await this.prisma.userAiCredential.findFirst({
       where: {

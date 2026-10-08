@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AiProviderVariant } from '@prisma/client';
+import { OpenAiImageProvider } from './openai-image.provider';
 
 export interface ImageExecuteInput {
   image?: Express.Multer.File;
@@ -23,6 +24,7 @@ export interface ImageProviderAdapter {
   execute(
     variant: AiProviderVariant,
     input: ImageExecuteInput,
+    options?: { apiKey?: string },
   ): Promise<ImageExecuteResult>;
 }
 
@@ -273,9 +275,13 @@ function extractImageUrl(output: unknown): string | undefined {
 export class ImageProviderRegistry {
   private readonly adapters = new Map<string, ImageProviderAdapter>();
 
-  constructor(replicate: ReplicateImageProvider) {
+  constructor(
+    replicate: ReplicateImageProvider,
+    openai: OpenAiImageProvider,
+  ) {
     this.adapters.set(replicate.id, replicate);
-    for (const id of ['openai', 'stability']) {
+    this.adapters.set(openai.id, openai);
+    for (const id of ['stability']) {
       this.adapters.set(id, new StubImageProvider(id));
     }
   }

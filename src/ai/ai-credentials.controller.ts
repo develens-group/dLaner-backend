@@ -55,4 +55,13 @@ export class AiCredentialsController {
   ) {
     return response(await this.credentials.remove(user.userId, id));
   }
+
+  @Post(':id/test')
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  async test(
+    @CurrentUser() user: AccessPrincipal,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return response(await this.credentials.testConnection(user.userId, id));
+  }
 }

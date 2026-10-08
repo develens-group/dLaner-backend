@@ -1,10 +1,18 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { AiOperation, AiRequestStatus, Prisma } from '@prisma/client';
+import {
+  AiBillingMode,
+  AiOperation,
+  AiRequestStatus,
+  Prisma,
+} from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 import { CreditService } from '../credits/credit.service';
 import { formatCreditAmount } from '../credits/credit-units';
 import { PrismaService } from '../prisma/prisma.service';
+import { isByokImageProvider } from './ai-byok-image';
+import { AiCredentialsService } from './ai-credentials.service';
+import { isProviderAuthError, redactSecrets } from './ai-error-utils';
 import { AiOperationsCatalogService } from './ai-operations.catalog';
 import {
   ImageExecuteInput,
@@ -19,6 +27,7 @@ export class AiOperationsExecuteService {
     private readonly credits: CreditService,
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
+    private readonly credentials: AiCredentialsService,
   ) {}
 
   async execute(
@@ -26,11 +35,38 @@ export class AiOperationsExecuteService {
     typeSlug: string,
     variantId: string | undefined,
     input: ImageExecuteInput,
+    credentialId?: string,
   ) {
     const variant = await this.catalog.resolveVariant(typeSlug, variantId);
+
+    if (credentialId && !isByokImageProvider(variant.provider)) {
+      throw new BadRequestException({
+        code: 'BYOK_NOT_SUPPORTED',
+        message: `Provider "${variant.provider}" does not support user API keys for this operation`,
+      });
+    }
+
+    if (variant.provider === 'openai' && !input.prompt?.trim()) {
+      throw new BadRequestException({
+        code: 'PROMPT_REQUIRED',
+        message: 'A non-empty prompt is required for OpenAI image generation',
+      });
+    }
+
+    const resolved = credentialId
+      ? await this.credentials.resolveForRequest(
+          userId,
+          credentialId,
+          variant.provider,
+        )
+      : undefined;
+    const billingMode = resolved
+      ? AiBillingMode.USER_KEY
+      : AiBillingMode.PLATFORM_CREDITS;
     const chargingEnabled =
+      billingMode === AiBillingMode.PLATFORM_CREDITS &&
       this.config.get('AI_CREDIT_CHARGING_ENABLED', 'true') !== 'false';
-    const cost = variant.creditCost;
+    const cost = resolved ? 0 : variant.creditCost;
     const operationKey = `ai-op:${userId}:${randomUUID()}`;
 
     const reservation = chargingEnabled
@@ -47,6 +83,8 @@ export class AiOperationsExecuteService {
     const record = await this.prisma.aiRequest.create({
       data: {
         userId,
+        credentialId: resolved?.credential.id,
+        billingMode,
         provider: variant.provider,
         model: variant.externalModel,
         operation: AiOperation.IMAGE_GENERATION,
@@ -67,7 +105,11 @@ export class AiOperationsExecuteService {
 
     try {
       const adapter = this.providers.get(variant.provider);
-      const result = await adapter.execute(variant, input);
+      const result = await adapter.execute(
+        variant,
+        input,
+        resolved ? { apiKey: resolved.apiKey } : undefined,
+      );
       if (reservation) {
         await this.credits.captureReservation(
           userId,
@@ -76,6 +118,10 @@ export class AiOperationsExecuteService {
           `${operationKey}:capture`,
         );
       }
+      if (resolved)
+        await this.credentials
+          .markUsed(resolved.credential.id)
+          .catch(() => undefined);
       const completedAt = new Date();
       await this.prisma.aiRequest.update({
         where: { id: record.id },
@@ -87,7 +133,7 @@ export class AiOperationsExecuteService {
           providerRequestId: result.providerRequestId,
           chargedCreditAmount: cost,
           actualCreditCost: cost,
-          creditChargedAt: completedAt,
+          creditChargedAt: resolved ? undefined : completedAt,
           completedAt,
           latencyMs: completedAt.getTime() - startedAt.getTime(),
         },
@@ -107,8 +153,16 @@ export class AiOperationsExecuteService {
           .releaseReservation(userId, reservation.id, `${operationKey}:release`)
           .catch(() => undefined);
       }
-      const message =
-        error instanceof Error ? error.message.slice(0, 500) : 'Provider failed';
+      const message = redactSecrets(
+        error instanceof Error ? error.message : 'Provider failed',
+      ).slice(0, 500);
+      if (resolved) {
+        // Only invalidate the user's key for auth-like provider failures.
+        await (isProviderAuthError(error)
+          ? this.credentials.markUsed(resolved.credential.id, message)
+          : this.credentials.markUsed(resolved.credential.id)
+        ).catch(() => undefined);
+      }
       await this.prisma.aiRequest.update({
         where: { id: record.id },
         data: {
