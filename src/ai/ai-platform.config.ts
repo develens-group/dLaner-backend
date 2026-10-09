@@ -50,13 +50,8 @@ export const AI_PLATFORM_CATALOG: AiProviderDefinition[] = [
     name: 'Google Gemini',
     models: [
       {
-        id: 'gemini-2.0-flash',
-        label: 'Gemini 2.0 Flash',
-        operations: [AiOperation.CHAT, AiOperation.TEXT_GENERATION],
-      },
-      {
-        id: 'gemini-2.0-flash-lite',
-        label: 'Gemini 2.0 Flash Lite',
+        id: 'gemini-3.8-flash',
+        label: 'Gemini 3.8 Flash',
         operations: [AiOperation.CHAT, AiOperation.TEXT_GENERATION],
       },
     ],
