@@ -21,7 +21,7 @@ import { AiRequestQueryDto, CreateAiRequestDto } from './ai.dto';
 import { CreditService } from '../credits/credit.service';
 import { CreditCostCalculator } from '../credits/credit-cost-calculator';
 import { AI_HISTORY_STORE, type AiHistoryStore } from './ai-history.store';
-import { isProviderAuthError } from './ai-error-utils';
+import { isProviderAuthError, redactSecrets } from './ai-error-utils';
 
 @Injectable()
 export class AiService {
@@ -201,7 +201,10 @@ export class AiService {
         },
       });
       if (error instanceof RequestTimeoutException) throw error;
-      throw new BadRequestException('AI provider request failed');
+      throw new BadRequestException({
+        message: redactSecrets(normalized.message).slice(0, 500),
+        code: normalized.code,
+      });
     }
   }
   async list(userId: string | undefined, query: AiRequestQueryDto) {

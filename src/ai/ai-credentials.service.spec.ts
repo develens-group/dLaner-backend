@@ -1,3 +1,4 @@
+import { BadRequestException } from '@nestjs/common';
 import { AiCredentialsService } from './ai-credentials.service';
 import { encryptSecret, keyHint } from './credential-crypto';
 
@@ -5,8 +6,19 @@ describe('AiCredentialsService.testConnection', () => {
   const hexKey = 'a'.repeat(64);
   const apiKey = 'sk-test-user-key-123456';
 
-  it('returns ok after decrypt without calling external providers', async () => {
+  const mockFetchOk = () =>
+    jest.spyOn(global, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({ data: [] }),
+    } as Response);
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it('returns ok after a live provider ping', async () => {
     const enc = encryptSecret(apiKey, hexKey);
+    const fetchMock = mockFetchOk();
     const prisma = {
       userAiCredential: {
         findFirst: jest.fn().mockResolvedValue({
@@ -17,7 +29,7 @@ describe('AiCredentialsService.testConnection', () => {
           keyHint: keyHint(apiKey),
           status: 'ACTIVE',
         }),
-        update: jest.fn(),
+        update: jest.fn().mockResolvedValue({}),
       },
     };
     const config = { get: jest.fn().mockReturnValue(hexKey) };
@@ -27,17 +39,26 @@ describe('AiCredentialsService.testConnection', () => {
 
     expect(result).toEqual({
       ok: true,
-      mode: 'resolve',
+      mode: 'live',
       provider: 'openai',
       keyHint: keyHint(apiKey),
     });
     expect(JSON.stringify(result)).not.toContain(apiKey);
     expect(JSON.stringify(result)).not.toContain(enc);
-    expect(prisma.userAiCredential.update).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalled();
+    expect(prisma.userAiCredential.update).toHaveBeenCalledWith({
+      where: { id: 'cred-1' },
+      data: {
+        lastUsedAt: expect.any(Date),
+        lastError: null,
+        status: 'ACTIVE',
+      },
+    });
   });
 
-  it('reactivates INVALID credentials after a successful decrypt test', async () => {
+  it('reactivates INVALID credentials after a successful live ping', async () => {
     const enc = encryptSecret(apiKey, hexKey);
+    mockFetchOk();
     const prisma = {
       userAiCredential: {
         findFirst: jest.fn().mockResolvedValue({
@@ -66,5 +87,46 @@ describe('AiCredentialsService.testConnection', () => {
         status: 'ACTIVE',
       },
     });
+  });
+
+  it('marks credential INVALID when the live ping fails', async () => {
+    const enc = encryptSecret(apiKey, hexKey);
+    jest.spyOn(global, 'fetch').mockResolvedValue({
+      ok: false,
+      status: 401,
+      json: async () => ({
+        error: { message: 'Incorrect API key provided: sk-test-user-key-123456' },
+      }),
+    } as Response);
+    const prisma = {
+      userAiCredential: {
+        findFirst: jest.fn().mockResolvedValue({
+          id: 'cred-1',
+          userId: 'user-1',
+          provider: 'openai',
+          apiKeyEnc: enc,
+          keyHint: keyHint(apiKey),
+          status: 'ACTIVE',
+        }),
+        update: jest.fn().mockResolvedValue({}),
+      },
+    };
+    const config = { get: jest.fn().mockReturnValue(hexKey) };
+    const service = new AiCredentialsService(prisma as any, config as any);
+
+    await expect(service.testConnection('user-1', 'cred-1')).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
+    expect(prisma.userAiCredential.update).toHaveBeenCalledWith({
+      where: { id: 'cred-1' },
+      data: {
+        lastUsedAt: expect.any(Date),
+        lastError: expect.stringContaining('Incorrect API key'),
+        status: 'INVALID',
+      },
+    });
+    const lastError =
+      prisma.userAiCredential.update.mock.calls[0][0].data.lastError as string;
+    expect(lastError).not.toContain(apiKey);
   });
 });

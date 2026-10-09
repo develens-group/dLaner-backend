@@ -42,13 +42,17 @@ export class GoogleProvider implements AiProvider {
         'Google Gemini is not configured on the platform',
       );
     const messages = resolveChatMessages(request.operation, request.input);
+    const systemInstruction = buildSystemInstruction(messages);
     const payload = await providerFetch<GeminiResponse>(
-      `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(request.model)}:generateContent?key=${encodeURIComponent(apiKey)}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(request.model)}:generateContent`,
       {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'x-goog-api-key': apiKey,
+        },
         body: JSON.stringify({
-          systemInstruction: buildSystemInstruction(messages),
+          ...(systemInstruction ? { systemInstruction } : {}),
           contents: toGeminiContents(messages),
           generationConfig: {
             maxOutputTokens: maxOutputTokens(request.input),

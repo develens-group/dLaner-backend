@@ -16,6 +16,9 @@ import {
   CreateAiCredentialDto,
   UpdateAiCredentialDto,
 } from './ai-credentials.dto';
+import { AiProviderError } from './ai-provider';
+import { pingByokCredential } from './byok-ping';
+import { redactSecrets } from './ai-error-utils';
 
 const BYOK_PROVIDERS = new Set(Object.keys(AI_PROVIDER_ENV_KEYS));
 
@@ -81,15 +84,25 @@ export class AiCredentialsService {
     if (credential.status === AiCredentialStatus.REVOKED) {
       throw new BadRequestException('Credential was revoked');
     }
-    // Prove decrypt works; do not return the secret.
-    // INVALID keys must be testable so users can recover after a bad run.
-    decryptSecret(credential.apiKeyEnc, this.encryptionKey());
-    if (credential.status !== AiCredentialStatus.ACTIVE) {
-      await this.markUsed(credential.id);
+    // Decrypt + live ping. INVALID keys must be testable so users can recover.
+    const apiKey = decryptSecret(credential.apiKeyEnc, this.encryptionKey());
+    try {
+      await pingByokCredential(credential.provider, apiKey);
+    } catch (error) {
+      const message = redactSecrets(
+        error instanceof AiProviderError
+          ? error.message
+          : error instanceof Error
+            ? error.message
+            : 'Connection test failed',
+      ).slice(0, 500);
+      await this.markUsed(credential.id, message).catch(() => undefined);
+      throw new BadRequestException(message);
     }
+    await this.markUsed(credential.id);
     return {
       ok: true as const,
-      mode: 'resolve' as const,
+      mode: 'live' as const,
       provider: credential.provider,
       keyHint: credential.keyHint,
     };
