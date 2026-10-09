@@ -1,11 +1,15 @@
 import { Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { CreditsModule } from '../credits/credits.module';
+import { TemplatesModule } from '../templates/templates.module';
 import { AdminAiController } from './admin-ai.controller';
 import { AdminAiCatalogController } from './admin-ai-catalog.controller';
 import { AiCatalogService } from './ai-catalog.service';
 import { AiCredentialsController } from './ai-credentials.controller';
 import { AiCredentialsService } from './ai-credentials.service';
+import { AiGalleryController } from './ai-gallery.controller';
+import { AiGalleryService } from './ai-gallery.service';
+import { AiGalleryStorageService } from './ai-gallery.storage';
 import {
   AI_HISTORY_STORE,
   CloudflareD1AiHistoryStore,
@@ -30,13 +34,14 @@ import { OpenAiImageProvider } from './providers/openai-image.provider';
 import { OpenAiProvider } from './providers/openai.provider';
 
 @Module({
-  imports: [CreditsModule],
+  imports: [CreditsModule, TemplatesModule],
   controllers: [
     AiController,
     AiCredentialsController,
     AdminAiController,
     AdminAiCatalogController,
     AiOperationsController,
+    AiGalleryController,
     FakeAiController,
   ],
   providers: [
@@ -48,6 +53,8 @@ import { OpenAiProvider } from './providers/openai.provider';
     AiCredentialsService,
     AiProviderRegistry,
     AiOperationsCatalogService,
+    AiGalleryStorageService,
+    AiGalleryService,
     AiOperationsExecuteService,
     ReplicateImageProvider,
     OpenAiImageProvider,

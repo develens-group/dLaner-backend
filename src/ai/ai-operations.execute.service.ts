@@ -13,6 +13,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { isByokImageProvider } from './ai-byok-image';
 import { AiCredentialsService } from './ai-credentials.service';
 import { isProviderAuthError, redactSecrets } from './ai-error-utils';
+import { AiGalleryStorageService } from './ai-gallery.storage';
 import { AiOperationsCatalogService } from './ai-operations.catalog';
 import {
   ImageExecuteInput,
@@ -28,6 +29,7 @@ export class AiOperationsExecuteService {
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
     private readonly credentials: AiCredentialsService,
+    private readonly galleryStorage: AiGalleryStorageService,
   ) {}
 
   async execute(
@@ -122,14 +124,41 @@ export class AiOperationsExecuteService {
         await this.credentials
           .markUsed(resolved.credential.id)
           .catch(() => undefined);
+
+      const persisted = await this.galleryStorage.persistCompletedAssets({
+        userId,
+        requestId: record.id,
+        input,
+        outputImageUrl: result.imageUrl,
+      });
+
+      const inputJson: Record<string, unknown> = {
+        type: typeSlug,
+        variantId: variant.id,
+        hasImage: Boolean(input.image),
+        prompt: input.prompt ?? null,
+      };
+      if (persisted.input) {
+        inputJson.inputStorageKey = persisted.input.storageKey;
+        inputJson.inputContentType = persisted.input.contentType;
+      }
+
+      const imageUrl = persisted.output?.signedUrl ?? result.imageUrl;
+      const outputJson: Record<string, unknown> = {
+        imageUrl,
+      };
+      if (persisted.output) {
+        outputJson.storageKey = persisted.output.storageKey;
+        outputJson.contentType = persisted.output.contentType;
+      }
+
       const completedAt = new Date();
       await this.prisma.aiRequest.update({
         where: { id: record.id },
         data: {
           status: AiRequestStatus.COMPLETED,
-          outputJson: {
-            imageUrl: result.imageUrl,
-          } as Prisma.InputJsonValue,
+          inputJson: inputJson as Prisma.InputJsonValue,
+          outputJson: outputJson as Prisma.InputJsonValue,
           providerRequestId: result.providerRequestId,
           chargedCreditAmount: cost,
           actualCreditCost: cost,
@@ -144,7 +173,7 @@ export class AiOperationsExecuteService {
         variantId: variant.id,
         provider: variant.provider,
         model: variant.externalModel,
-        imageUrl: result.imageUrl,
+        imageUrl,
         creditCost: formatCreditAmount(cost),
       };
     } catch (error) {

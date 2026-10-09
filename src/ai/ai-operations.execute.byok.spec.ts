@@ -4,6 +4,7 @@ import { AiBillingMode } from '@prisma/client';
 import { CreditService } from '../credits/credit.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { AiCredentialsService } from './ai-credentials.service';
+import { AiGalleryStorageService } from './ai-gallery.storage';
 import { AiOperationsCatalogService } from './ai-operations.catalog';
 import { AiOperationsExecuteService } from './ai-operations.execute.service';
 import { ImageProviderRegistry } from './providers/image-provider.registry';
@@ -35,6 +36,9 @@ describe('AiOperationsExecuteService BYOK', () => {
       update: jest.fn().mockResolvedValue({}),
     },
   };
+  const galleryStorage = {
+    persistCompletedAssets: jest.fn().mockResolvedValue({}),
+  };
 
   let service: AiOperationsExecuteService;
 
@@ -48,6 +52,7 @@ describe('AiOperationsExecuteService BYOK', () => {
     prisma.aiRequest.create.mockResolvedValue({ id: 'req-1' });
     adapterExecute.mockResolvedValue({ imageUrl: 'https://img/x.png' });
     providers.get.mockReturnValue({ execute: adapterExecute });
+    galleryStorage.persistCompletedAssets.mockResolvedValue({});
 
     service = new AiOperationsExecuteService(
       catalog as unknown as AiOperationsCatalogService,
@@ -56,6 +61,7 @@ describe('AiOperationsExecuteService BYOK', () => {
       prisma as unknown as PrismaService,
       config as unknown as ConfigService,
       credentials as unknown as AiCredentialsService,
+      galleryStorage as unknown as AiGalleryStorageService,
     );
   });
 
@@ -122,8 +128,86 @@ describe('AiOperationsExecuteService BYOK', () => {
       }),
     );
     expect(credentials.markUsed).toHaveBeenCalledWith(credentialId);
+    expect(galleryStorage.persistCompletedAssets).toHaveBeenCalled();
     expect(result.imageUrl).toBe('https://img/x.png');
     expect(result.creditCost).toBe('0');
+  });
+
+  it('persists gallery keys into request JSON when storage succeeds', async () => {
+    catalog.resolveVariant.mockResolvedValue({
+      id: 'variant-oai',
+      provider: 'openai',
+      externalModel: 'gpt-image-1',
+      creditCost: 5,
+    });
+    galleryStorage.persistCompletedAssets.mockResolvedValue({
+      input: {
+        storageKey: 'ai-gallery/user-1/req-1/in.jpg',
+        contentType: 'image/jpeg',
+        signedUrl: 'signed://in',
+      },
+      output: {
+        storageKey: 'ai-gallery/user-1/req-1/out.png',
+        contentType: 'image/png',
+        signedUrl: 'signed://out',
+      },
+    });
+
+    const result = await service.execute(
+      userId,
+      'generate-image',
+      'variant-oai',
+      {
+        prompt: 'a cat',
+        image: {
+          buffer: Buffer.from([1]),
+          mimetype: 'image/jpeg',
+        } as Express.Multer.File,
+      },
+      credentialId,
+    );
+
+    expect(result.imageUrl).toBe('signed://out');
+    expect(prisma.aiRequest.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          inputJson: expect.objectContaining({
+            inputStorageKey: 'ai-gallery/user-1/req-1/in.jpg',
+          }),
+          outputJson: expect.objectContaining({
+            storageKey: 'ai-gallery/user-1/req-1/out.png',
+            imageUrl: 'signed://out',
+          }),
+        }),
+      }),
+    );
+  });
+
+  it('keeps provider URL when gallery persist returns empty', async () => {
+    catalog.resolveVariant.mockResolvedValue({
+      id: 'variant-oai',
+      provider: 'openai',
+      externalModel: 'gpt-image-1',
+      creditCost: 5,
+    });
+    galleryStorage.persistCompletedAssets.mockResolvedValue({});
+
+    const result = await service.execute(
+      userId,
+      'generate-image',
+      'variant-oai',
+      { prompt: 'a cat' },
+      credentialId,
+    );
+
+    expect(result.imageUrl).toBe('https://img/x.png');
+    expect(prisma.aiRequest.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          outputJson: { imageUrl: 'https://img/x.png' },
+        }),
+      }),
+    );
   });
 
   it('marks credential with error when adapter fails', async () => {
@@ -165,6 +249,7 @@ describe('AiOperationsExecuteService BYOK', () => {
       }),
     );
     expect(credits.releaseReservation).not.toHaveBeenCalled();
+    expect(galleryStorage.persistCompletedAssets).not.toHaveBeenCalled();
   });
 
   it('does not invalidate credential on non-auth provider failure', async () => {
