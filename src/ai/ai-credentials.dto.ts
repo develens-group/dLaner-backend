@@ -41,4 +41,15 @@ export class UpdateAiCredentialDto {
   @IsOptional()
   @IsBoolean()
   isDefault?: boolean;
+
+  @ApiPropertyOptional({
+    example: 'sk-proj-...',
+    minLength: 16,
+    maxLength: 512,
+    description: 'Replace the stored API key (re-encrypts; never returned).',
+  })
+  @IsOptional()
+  @IsString()
+  @Length(16, 512)
+  apiKey?: string;
 }

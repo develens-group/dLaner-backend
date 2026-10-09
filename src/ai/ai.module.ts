@@ -30,6 +30,7 @@ import {
   ImageProviderRegistry,
   ReplicateImageProvider,
 } from './providers/image-provider.registry';
+import { GoogleImageProvider } from './providers/google-image.provider';
 import { OpenAiImageProvider } from './providers/openai-image.provider';
 import { OpenAiProvider } from './providers/openai.provider';
 
@@ -58,6 +59,7 @@ import { OpenAiProvider } from './providers/openai.provider';
     AiOperationsExecuteService,
     ReplicateImageProvider,
     OpenAiImageProvider,
+    GoogleImageProvider,
     ImageProviderRegistry,
     {
       provide: AI_HISTORY_STORE,

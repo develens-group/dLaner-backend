@@ -89,6 +89,48 @@ describe('AiCredentialsService.testConnection', () => {
     });
   });
 
+  it('rotates api key on update and clears INVALID status', async () => {
+    const enc = encryptSecret(apiKey, hexKey);
+    const prisma = {
+      userAiCredential: {
+        findFirst: jest.fn().mockResolvedValue({
+          id: 'cred-1',
+          userId: 'user-1',
+          provider: 'openai',
+          apiKeyEnc: enc,
+          status: 'INVALID',
+        }),
+        update: jest.fn().mockResolvedValue({
+          id: 'cred-1',
+          provider: 'openai',
+          status: 'ACTIVE',
+          keyHint: keyHint('sk-rotated-user-key-999999'),
+        }),
+        updateMany: jest.fn(),
+      },
+    };
+    const config = { get: jest.fn().mockReturnValue(hexKey) };
+    const service = new AiCredentialsService(prisma as any, config as any);
+
+    await service.update('user-1', 'cred-1', {
+      apiKey: 'sk-rotated-user-key-999999',
+    });
+
+    expect(prisma.userAiCredential.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          status: 'ACTIVE',
+          lastError: null,
+          keyHint: keyHint('sk-rotated-user-key-999999'),
+          apiKeyEnc: expect.any(String),
+        }),
+      }),
+    );
+    const storedEnc = prisma.userAiCredential.update.mock.calls[0][0].data
+      .apiKeyEnc as string;
+    expect(storedEnc).not.toContain('sk-rotated');
+  });
+
   it('marks credential INVALID when the live ping fails', async () => {
     const enc = encryptSecret(apiKey, hexKey);
     jest.spyOn(global, 'fetch').mockResolvedValue({

@@ -64,4 +64,13 @@ export class AiCredentialsController {
   ) {
     return response(await this.credentials.testConnection(user.userId, id));
   }
+
+  @Get(':id/models')
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
+  async models(
+    @CurrentUser() user: AccessPrincipal,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return response(await this.credentials.listModels(user.userId, id));
+  }
 }

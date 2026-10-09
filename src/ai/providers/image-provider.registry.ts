@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AiProviderVariant } from '@prisma/client';
+import { GoogleImageProvider } from './google-image.provider';
 import { OpenAiImageProvider } from './openai-image.provider';
 
 export interface ImageExecuteInput {
@@ -60,8 +61,12 @@ export class ReplicateImageProvider implements ImageProviderAdapter {
   async execute(
     variant: AiProviderVariant,
     input: ImageExecuteInput,
+    options?: { apiKey?: string },
   ): Promise<ImageExecuteResult> {
-    const token = this.config.get<string>('REPLICATE_API_TOKEN', '');
+    const token =
+      options?.apiKey?.trim() ||
+      this.config.get<string>('REPLICATE_API_TOKEN', '')?.trim() ||
+      '';
     if (!token)
       throw new ServiceUnavailableException({
         code: 'PROVIDER_NOT_CONFIGURED',
@@ -278,9 +283,11 @@ export class ImageProviderRegistry {
   constructor(
     replicate: ReplicateImageProvider,
     openai: OpenAiImageProvider,
+    google: GoogleImageProvider,
   ) {
     this.adapters.set(replicate.id, replicate);
     this.adapters.set(openai.id, openai);
+    this.adapters.set(google.id, google);
     for (const id of ['stability']) {
       this.adapters.set(id, new StubImageProvider(id));
     }

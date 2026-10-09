@@ -65,28 +65,38 @@ describe('AiOperationsExecuteService BYOK', () => {
     );
   });
 
-  it('rejects credentialId for replicate variants', async () => {
+  it('accepts credentialId for replicate variants and skips credits', async () => {
     catalog.resolveVariant.mockResolvedValue({
       id: 'variant-rep',
       provider: 'replicate',
       externalModel: 'm',
       creditCost: 5,
     });
+    credentials.resolveForRequest.mockResolvedValue({
+      credential: { id: credentialId, provider: 'replicate' },
+      apiKey: 'r8_user_token',
+    });
 
-    const promise = service.execute(
+    const result = await service.execute(
       userId,
       'generate-image',
       'variant-rep',
       { prompt: 'x' },
       credentialId,
     );
-    await expect(promise).rejects.toBeInstanceOf(BadRequestException);
-    await expect(promise).rejects.toMatchObject({
-      response: { code: 'BYOK_NOT_SUPPORTED' },
-    });
-    expect(credentials.resolveForRequest).not.toHaveBeenCalled();
+
+    expect(credentials.resolveForRequest).toHaveBeenCalledWith(
+      userId,
+      credentialId,
+      'replicate',
+    );
     expect(credits.reserveCredits).not.toHaveBeenCalled();
-    expect(prisma.aiRequest.create).not.toHaveBeenCalled();
+    expect(adapterExecute).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'variant-rep' }),
+      { prompt: 'x' },
+      { apiKey: 'r8_user_token' },
+    );
+    expect(result.creditCost).toBe('0');
   });
 
   it('skips credit reserve for openai + credentialId', async () => {
@@ -301,5 +311,89 @@ describe('AiOperationsExecuteService BYOK', () => {
     expect(credits.reserveCredits).not.toHaveBeenCalled();
     expect(prisma.aiRequest.create).not.toHaveBeenCalled();
     expect(credentials.markUsed).not.toHaveBeenCalled();
+  });
+
+  it('executeCustom runs BYOK without a catalog type', async () => {
+    credentials.resolveForRequest.mockResolvedValue({
+      credential: { id: credentialId, provider: 'openai' },
+      apiKey: 'user-sk-test',
+    });
+
+    const result = await service.executeCustom(userId, {
+      credentialId,
+      provider: 'openai',
+      model: 'gpt-image-1',
+      mode: 'generations',
+      prompt: 'a cat',
+    });
+
+    expect(credits.reserveCredits).not.toHaveBeenCalled();
+    expect(adapterExecute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        provider: 'openai',
+        externalModel: 'gpt-image-1',
+      }),
+      { prompt: 'a cat', image: undefined },
+      { apiKey: 'user-sk-test' },
+    );
+    expect(prisma.aiRequest.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          model: 'gpt-image-1',
+          variantId: undefined,
+          billingMode: AiBillingMode.USER_KEY,
+        }),
+      }),
+    );
+    expect(result.type).toBe('custom-byok');
+    expect(result.creditCost).toBe('0');
+  });
+
+  it('executeCustom supports google Gemini image BYOK', async () => {
+    credentials.resolveForRequest.mockResolvedValue({
+      credential: { id: credentialId, provider: 'google' },
+      apiKey: 'user-google-key',
+    });
+
+    const result = await service.executeCustom(userId, {
+      credentialId,
+      provider: 'google',
+      model: 'gemini-2.5-flash-image',
+      mode: 'generations',
+      prompt: 'a nano banana',
+    });
+
+    expect(credits.reserveCredits).not.toHaveBeenCalled();
+    expect(adapterExecute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        provider: 'google',
+        externalModel: 'gemini-2.5-flash-image',
+      }),
+      { prompt: 'a nano banana', image: undefined },
+      { apiKey: 'user-google-key' },
+    );
+    expect(result.type).toBe('custom-byok');
+  });
+
+  it('rejects openai edits without an image before reserve/create', async () => {
+    catalog.resolveVariant.mockResolvedValue({
+      id: 'variant-edit',
+      provider: 'openai',
+      externalModel: 'gpt-image-1',
+      creditCost: 5,
+      configJson: { mode: 'edits' },
+    });
+
+    await expect(
+      service.execute(
+        userId,
+        'edit-image',
+        'variant-edit',
+        { prompt: 'make blue' },
+        credentialId,
+      ),
+    ).rejects.toMatchObject({ response: { code: 'IMAGE_REQUIRED' } });
+    expect(credits.reserveCredits).not.toHaveBeenCalled();
+    expect(prisma.aiRequest.create).not.toHaveBeenCalled();
   });
 });

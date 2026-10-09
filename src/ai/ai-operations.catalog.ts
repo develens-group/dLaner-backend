@@ -16,10 +16,11 @@ import {
   UpdateOperationTypeDto,
   UpdateProviderVariantDto,
 } from './ai-operations.dto';
+import { isByokImageProvider } from './ai-byok-image';
 
 const BUILTIN_PROVIDERS = [
   { id: 'replicate', label: 'Replicate', implemented: true },
-  { id: 'openai', label: 'OpenAI', implemented: false },
+  { id: 'openai', label: 'OpenAI', implemented: true },
   { id: 'stability', label: 'Stability', implemented: false },
 ] as const;
 
@@ -294,10 +295,15 @@ export class AiOperationsCatalogService {
     };
   }
 
-  private serializeVariant<T extends { creditCost: unknown }>(variant: T) {
+  private serializeVariant<
+    T extends { creditCost: unknown; provider?: string },
+  >(variant: T) {
+    const provider =
+      typeof variant.provider === 'string' ? variant.provider : '';
     return {
       ...variant,
       creditCost: formatCreditAmount(variant.creditCost as never),
+      supportsUserKey: isByokImageProvider(provider),
     };
   }
 }

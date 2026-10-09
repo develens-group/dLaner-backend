@@ -17,7 +17,7 @@ import {
   UpdateAiCredentialDto,
 } from './ai-credentials.dto';
 import { AiProviderError } from './ai-provider';
-import { pingByokCredential } from './byok-ping';
+import { listByokModels, pingByokCredential } from './byok-ping';
 import { redactSecrets } from './ai-error-utils';
 
 const BYOK_PROVIDERS = new Set(Object.keys(AI_PROVIDER_ENV_KEYS));
@@ -63,11 +63,22 @@ export class AiCredentialsService {
     const existing = await this.owned(userId, id);
     if (dto.isDefault === true)
       await this.clearDefaults(userId, existing.provider);
+    const nextKey = dto.apiKey?.trim();
+    if (nextKey !== undefined && nextKey.length < 16)
+      throw new BadRequestException('API key is too short');
     return this.prisma.userAiCredential.update({
       where: { id },
       data: {
         ...(dto.label !== undefined ? { label: dto.label?.trim() || null } : {}),
         ...(dto.isDefault !== undefined ? { isDefault: dto.isDefault } : {}),
+        ...(nextKey
+          ? {
+              apiKeyEnc: encryptSecret(nextKey, this.encryptionKey()),
+              keyHint: keyHint(nextKey),
+              status: AiCredentialStatus.ACTIVE,
+              lastError: null,
+            }
+          : {}),
       },
       select: this.safeSelect,
     });
@@ -106,6 +117,30 @@ export class AiCredentialsService {
       provider: credential.provider,
       keyHint: credential.keyHint,
     };
+  }
+
+  async listModels(userId: string, id: string) {
+    const credential = await this.owned(userId, id);
+    if (credential.status === AiCredentialStatus.REVOKED) {
+      throw new BadRequestException('Credential was revoked');
+    }
+    const apiKey = decryptSecret(credential.apiKeyEnc, this.encryptionKey());
+    try {
+      const models = await listByokModels(credential.provider, apiKey);
+      return {
+        provider: credential.provider,
+        models,
+      };
+    } catch (error) {
+      const message = redactSecrets(
+        error instanceof AiProviderError
+          ? error.message
+          : error instanceof Error
+            ? error.message
+            : 'Could not list models',
+      ).slice(0, 500);
+      throw new BadRequestException(message);
+    }
   }
 
   async resolveForRequest(userId: string, credentialId: string, provider: string) {

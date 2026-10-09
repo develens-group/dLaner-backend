@@ -62,4 +62,6 @@ export const AI_PROVIDER_ENV_KEYS: Record<string, string> = {
   openai: 'OPENAI_API_KEY',
   anthropic: 'ANTHROPIC_API_KEY',
   google: 'GOOGLE_AI_API_KEY',
+  /** Image BYOK only — not listed in text AI_PLATFORM_CATALOG. */
+  replicate: 'REPLICATE_API_TOKEN',
 };

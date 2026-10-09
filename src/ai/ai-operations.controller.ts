@@ -14,7 +14,13 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
-import { IsOptional, IsString, IsUUID, MaxLength } from 'class-validator';
+import {
+  IsIn,
+  IsOptional,
+  IsString,
+  IsUUID,
+  MaxLength,
+} from 'class-validator';
 import { memoryStorage } from 'multer';
 import { response } from '../common/api-response';
 import type { AccessPrincipal } from '../common/auth.types';
@@ -27,6 +33,15 @@ class ExecuteOperationDto {
   @IsOptional() @IsUUID() variantId?: string;
   @IsOptional() @IsString() @MaxLength(2000) prompt?: string;
   @IsOptional() @IsUUID() credentialId?: string;
+}
+
+class ExecuteCustomByokDto {
+  @IsUUID() credentialId!: string;
+  @IsString() @MaxLength(100) provider!: string;
+  @IsString() @MaxLength(200) model!: string;
+  @IsOptional() @IsIn(['generations', 'edits']) mode?: 'generations' | 'edits';
+  @IsOptional() @IsString() @MaxLength(200) version?: string;
+  @IsOptional() @IsString() @MaxLength(2000) prompt?: string;
 }
 
 @ApiTags('ai-operations')
@@ -57,7 +72,7 @@ export class AiOperationsController {
           type: 'string',
           format: 'uuid',
           description:
-            'Optional BYOK credential (openai image variants only); skips platform credits',
+            'Optional BYOK credential; skips platform credits when provider supports user keys',
         },
         image: { type: 'string', format: 'binary' },
       },
@@ -82,6 +97,34 @@ export class AiOperationsController {
         { image, prompt: dto.prompt },
         dto.credentialId,
       ),
+    );
+  }
+
+  /** Free-form image run with the user's own key (no admin catalog type). */
+  @Post('execute-custom')
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
+  @ApiConsumes('multipart/form-data')
+  @UseInterceptors(
+    FileInterceptor('image', {
+      storage: memoryStorage(),
+      limits: { fileSize: 10 * 1024 * 1024 },
+    }),
+  )
+  async executeCustom(
+    @CurrentUser() user: AccessPrincipal,
+    @Body() dto: ExecuteCustomByokDto,
+    @UploadedFile() image?: Express.Multer.File,
+  ) {
+    return response(
+      await this.executeService.executeCustom(user.userId, {
+        credentialId: dto.credentialId,
+        provider: dto.provider,
+        model: dto.model,
+        mode: dto.mode,
+        version: dto.version,
+        prompt: dto.prompt,
+        image,
+      }),
     );
   }
 }
