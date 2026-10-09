@@ -21,6 +21,7 @@ import { AiRequestQueryDto, CreateAiRequestDto } from './ai.dto';
 import { CreditService } from '../credits/credit.service';
 import { CreditCostCalculator } from '../credits/credit-cost-calculator';
 import { AI_HISTORY_STORE, type AiHistoryStore } from './ai-history.store';
+import { isProviderAuthError } from './ai-error-utils';
 
 @Injectable()
 export class AiService {
@@ -169,9 +170,14 @@ export class AiService {
     } catch (error) {
       if (resolved) {
         const normalized = normalizeError(error);
-        await this.credentials
-          .markUsed(resolved.credential.id, normalized.message)
-          .catch(() => undefined);
+        // Match image BYOK: only auth failures mark the key INVALID.
+        await (isProviderAuthError(error)
+          ? this.credentials.markUsed(
+              resolved.credential.id,
+              normalized.message,
+            )
+          : this.credentials.markUsed(resolved.credential.id)
+        ).catch(() => undefined);
       }
       if (
         reservation &&

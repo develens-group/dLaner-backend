@@ -78,11 +78,15 @@ export class AiCredentialsService {
 
   async testConnection(userId: string, id: string) {
     const credential = await this.owned(userId, id);
-    if (credential.status !== AiCredentialStatus.ACTIVE) {
-      throw new BadRequestException('Credential is not ACTIVE');
+    if (credential.status === AiCredentialStatus.REVOKED) {
+      throw new BadRequestException('Credential was revoked');
     }
-    // Prove decrypt works; do not return the secret
+    // Prove decrypt works; do not return the secret.
+    // INVALID keys must be testable so users can recover after a bad run.
     decryptSecret(credential.apiKeyEnc, this.encryptionKey());
+    if (credential.status !== AiCredentialStatus.ACTIVE) {
+      await this.markUsed(credential.id);
+    }
     return {
       ok: true as const,
       mode: 'resolve' as const,
