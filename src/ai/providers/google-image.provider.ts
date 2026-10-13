@@ -1,6 +1,8 @@
 import {
   BadGatewayException,
   BadRequestException,
+  HttpException,
+  HttpStatus,
   Injectable,
   ServiceUnavailableException,
 } from '@nestjs/common';
@@ -105,10 +107,23 @@ export class GoogleImageProvider implements ImageProviderAdapter {
     const payload = (await res.json().catch(() => ({}))) as GeminiImageResponse;
 
     if (!res.ok) {
+      const message =
+        payload.error?.message || `Google Gemini HTTP ${res.status}`;
+      if (res.status === 429) {
+        throw new HttpException(
+          {
+            code: 'AI_PROVIDER_QUOTA',
+            message:
+              'Google Gemini quota exceeded for this API key / model. Pick another image model, wait for the free-tier reset, or enable billing in Google AI Studio.',
+            detail: message,
+            providerStatus: res.status,
+          },
+          HttpStatus.TOO_MANY_REQUESTS,
+        );
+      }
       throw new BadGatewayException({
         code: 'AI_PROVIDER_FAILED',
-        message:
-          payload.error?.message || `Google Gemini HTTP ${res.status}`,
+        message,
         providerStatus: res.status,
       });
     }

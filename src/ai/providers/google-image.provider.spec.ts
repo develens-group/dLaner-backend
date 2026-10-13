@@ -126,4 +126,29 @@ describe('GoogleImageProvider', () => {
       ),
     ).rejects.toMatchObject({ response: { code: 'IMAGE_REQUIRED' } });
   });
+
+  it('maps Google 429 quota errors to AI_PROVIDER_QUOTA', async () => {
+    jest.spyOn(global, 'fetch').mockResolvedValue({
+      ok: false,
+      status: 429,
+      json: async () => ({
+        error: { message: 'Quota exceeded for free tier' },
+      }),
+    } as Response);
+
+    const provider = new GoogleImageProvider(config);
+    await expect(
+      provider.execute(
+        {
+          externalModel: 'gemini-2.5-flash-preview-image',
+          configJson: { mode: 'generations' },
+        } as never,
+        { prompt: 'a cat' },
+        { apiKey: 'user-key' },
+      ),
+    ).rejects.toMatchObject({
+      status: 429,
+      response: { code: 'AI_PROVIDER_QUOTA' },
+    });
+  });
 });
