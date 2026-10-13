@@ -26,23 +26,23 @@ export async function listByokModels(
         },
         'google',
       );
-      return (body.models ?? [])
-        .map((item) => {
-          const raw = item.name?.trim() ?? '';
-          const id = raw.replace(/^models\//, '');
-          if (!id) return null;
-          if (
-            id.includes('embedding') ||
-            id.includes('aqa') ||
-            id.includes('gecko')
-          )
-            return null;
-          return {
+      return (body.models ?? []).flatMap((item): ByokModelInfo[] => {
+        const raw = item.name?.trim() ?? '';
+        const id = raw.replace(/^models\//, '');
+        if (!id) return [];
+        if (
+          id.includes('embedding') ||
+          id.includes('aqa') ||
+          id.includes('gecko')
+        )
+          return [];
+        return [
+          {
             id,
             label: item.displayName?.trim() || id,
-          } satisfies ByokModelInfo;
-        })
-        .filter((item): item is ByokModelInfo => item !== null);
+          },
+        ];
+      });
     }
     case 'openai': {
       const body = await providerFetch<{
@@ -87,16 +87,16 @@ export async function listByokModels(
         },
         'anthropic',
       );
-      return (body.data ?? [])
-        .map((item) => {
-          const id = item.id?.trim();
-          if (!id) return null;
-          return {
+      return (body.data ?? []).flatMap((item): ByokModelInfo[] => {
+        const id = item.id?.trim();
+        if (!id) return [];
+        return [
+          {
             id,
             label: item.display_name?.trim() || id,
-          } satisfies ByokModelInfo;
-        })
-        .filter((item): item is ByokModelInfo => item !== null);
+          },
+        ];
+      });
     }
     case 'replicate':
       // Image BYOK only — validate the token; models come from the admin catalog.
