@@ -92,6 +92,31 @@ export class CreditService {
       lifetimePurchasedDelta: purchase ? amt : zero,
     });
   }
+
+  /** Included subscription-period credits (separate from credit packages). */
+  grantPromotionCredits(
+    userId: string,
+    amount: CreditAmount,
+    key: string,
+    referenceType: string,
+    referenceId?: string,
+    description?: string,
+  ) {
+    const amt = parseCreditAmount(amount);
+    const zero = new Prisma.Decimal(0);
+    return this.mutate({
+      userId,
+      amount: amt,
+      availableDelta: amt,
+      reservedDelta: zero,
+      type: CreditLedgerType.PROMOTION,
+      idempotencyKey: key,
+      referenceType,
+      referenceId,
+      description,
+      lifetimePurchasedDelta: zero,
+    });
+  }
   deductCredits(
     userId: string,
     amount: CreditAmount,

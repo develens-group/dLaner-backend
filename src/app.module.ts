@@ -17,6 +17,7 @@ import { RequestTrackingModule } from './request-tracking/request-tracking.modul
 import { RequestTrackingMiddleware } from './request-tracking/request-tracking.middleware';
 import { AiModule } from './ai/ai.module';
 import { CreditsModule } from './credits/credits.module';
+import { BillingModule } from './billing/billing.module';
 import { HealthController } from './health.controller';
 import { TemplatesModule } from './templates/templates.module';
 import { WordPressModule } from './wordpress/wordpress.module';
@@ -34,6 +35,7 @@ import { LandsModule } from './lands/lands.module';
     AdminModule,
     RequestTrackingModule,
     CreditsModule,
+    BillingModule,
     AiModule,
     TemplatesModule,
     WordPressModule,

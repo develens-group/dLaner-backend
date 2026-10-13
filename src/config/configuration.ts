@@ -44,6 +44,7 @@ class Environment {
   @IsInt() @Min(1) CREDIT_RESERVATION_TTL_SECONDS = 900;
   @IsString() PAYMENT_PROVIDER = 'mock';
   @IsIn(['true', 'false']) CREDIT_PURCHASE_ENABLED = 'false';
+  @IsIn(['true', 'false']) SUBSCRIPTION_PURCHASE_ENABLED = 'true';
   @IsString() PAYMENT_WEBHOOK_SECRET!: string;
   @IsUrl({ require_tld: false }) PAYMENT_RETURN_URL!: string;
   @IsUrl({ require_tld: false }) PAYMENT_CANCEL_URL!: string;

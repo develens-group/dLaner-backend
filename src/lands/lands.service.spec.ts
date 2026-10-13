@@ -7,6 +7,7 @@ describe('LandsService canvas validation', () => {
     {} as never,
     new ConfigService(),
     {} as never,
+    { assertCanStore: jest.fn() } as never,
   );
   const validate = (value: unknown) =>
     (

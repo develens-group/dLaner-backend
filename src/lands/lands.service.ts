@@ -6,6 +6,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { BillingStorageService } from '../billing/billing-storage.service';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   OBJECT_STORAGE,
@@ -19,6 +20,7 @@ export class LandsService {
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
     @Inject(OBJECT_STORAGE) private readonly storage: ObjectStorageService,
+    private readonly billingStorage: BillingStorageService,
   ) {}
 
   async create(userId: string, dto: CreateLandDto) {
@@ -91,6 +93,22 @@ export class LandsService {
     const maxBytes = this.config.get<number>('LAND_MAX_JSON_BYTES', 10_000_000);
     if (body.length > maxBytes)
       throw new BadRequestException(`Canvas exceeds ${maxBytes} bytes`);
+    const keep = this.config.get<number>('LAND_REVISION_RETENTION', 3);
+    const maybeObsolete = await this.prisma.landRevision.findMany({
+      where: { landId },
+      orderBy: { revision: 'desc' },
+      skip: Math.max(keep - 1, 0),
+      select: { sizeBytes: true },
+    });
+    const replacingBytes = maybeObsolete.reduce(
+      (sum, item) => sum + item.sizeBytes,
+      0,
+    );
+    await this.billingStorage.assertCanStore(
+      userId,
+      body.length,
+      replacingBytes,
+    );
     const hash = createHash('sha256').update(body).digest('hex');
     const objectId = randomUUID();
     const key = `lands/${userId}/${landId}/${objectId}.json`;
