@@ -127,12 +127,15 @@ describe('GoogleImageProvider', () => {
     ).rejects.toMatchObject({ response: { code: 'IMAGE_REQUIRED' } });
   });
 
-  it('maps Google 429 quota errors to AI_PROVIDER_QUOTA', async () => {
-    jest.spyOn(global, 'fetch').mockResolvedValue({
+  it('maps Google 429 free-tier image blocks to a clear quota message', async () => {
+    const fetchMock = jest.spyOn(global, 'fetch').mockResolvedValue({
       ok: false,
       status: 429,
       json: async () => ({
-        error: { message: 'Quota exceeded for free tier' },
+        error: {
+          message:
+            'Quota exceeded for metric: generate_content_free_tier_requests, limit: 0, model: gemini-2.5-flash-preview-image',
+        },
       }),
     } as Response);
 
@@ -148,7 +151,14 @@ describe('GoogleImageProvider', () => {
       ),
     ).rejects.toMatchObject({
       status: 429,
-      response: { code: 'AI_PROVIDER_QUOTA' },
+      response: {
+        code: 'AI_PROVIDER_QUOTA',
+        message: expect.stringMatching(/not available on the free tier/i),
+        model: 'gemini-2.5-flash-image',
+      },
     });
+    expect(String(fetchMock.mock.calls[0][0])).toContain(
+      'gemini-2.5-flash-image:generateContent',
+    );
   });
 });

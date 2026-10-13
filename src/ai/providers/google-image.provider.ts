@@ -87,7 +87,7 @@ export class GoogleImageProvider implements ImageProviderAdapter {
       });
     }
 
-    const model = variant.externalModel.replace(/^models\//, '');
+    const model = normalizeGoogleImageModel(variant.externalModel);
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;
 
     const res = await fetch(url, {
@@ -110,13 +110,17 @@ export class GoogleImageProvider implements ImageProviderAdapter {
       const message =
         payload.error?.message || `Google Gemini HTTP ${res.status}`;
       if (res.status === 429) {
+        const freeTierBlocked =
+          /free_tier/i.test(message) && /limit:\s*0/i.test(message);
         throw new HttpException(
           {
             code: 'AI_PROVIDER_QUOTA',
-            message:
-              'Google Gemini quota exceeded for this API key / model. Pick another image model, wait for the free-tier reset, or enable billing in Google AI Studio.',
+            message: freeTierBlocked
+              ? 'Google Gemini image models are not available on the free tier for this API key. Enable billing in Google AI Studio (paid tier), then retry. Text models may still work on free tier.'
+              : 'Google Gemini quota exceeded for this API key / model. Pick another image model, wait for reset, or enable billing in Google AI Studio.',
             detail: message,
             providerStatus: res.status,
+            model,
           },
           HttpStatus.TOO_MANY_REQUESTS,
         );
@@ -149,4 +153,16 @@ function extractImageDataUrl(payload: GeminiImageResponse): string | undefined {
     return `data:${mime};base64,${data}`;
   }
   return undefined;
+}
+
+/** Drop deprecated preview aliases that Google still lists for some keys. */
+export function normalizeGoogleImageModel(externalModel: string): string {
+  const model = externalModel.replace(/^models\//, '').trim();
+  if (/gemini-2\.5-flash-(preview-)?image/i.test(model)) {
+    return 'gemini-2.5-flash-image';
+  }
+  if (/preview/i.test(model) && /image/i.test(model)) {
+    return 'gemini-3.1-flash-image';
+  }
+  return model;
 }
