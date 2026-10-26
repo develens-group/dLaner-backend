@@ -9,6 +9,8 @@ import {
 } from 'class-validator';
 
 class Environment {
+  @IsIn(['true', 'false']) MCP_ENABLED = 'false';
+  @IsUrl({ require_tld: false }) MCP_EDITOR_URL = 'http://localhost:5173/land';
   @IsString() DATABASE_URL!: string;
   @IsString() JWT_ACCESS_SECRET!: string;
   @IsString() JWT_REFRESH_SECRET!: string;

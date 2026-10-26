@@ -78,3 +78,21 @@ describe('request ID handling', () => {
     expect(enqueue.mock.calls[0][0]).not.toHaveProperty('timestamp');
   });
 });
+
+// Guest access links and user scene bodies must not enter persistent tracking.
+describe('guest MCP tracking privacy', () => {
+  it.each(['/mcp', '/mcp/', '/api/v1/mcp/designs/' + 'a'.repeat(64)])(
+    'does not record %s',
+    (path) => {
+      const enqueue = jest.fn();
+      const middleware = new RequestTrackingMiddleware(
+        { enqueue } as never,
+        new ConfigService(),
+      );
+      const next = jest.fn();
+      middleware.use({ path } as never, {} as never, next);
+      expect(next).toHaveBeenCalledTimes(1);
+      expect(enqueue).not.toHaveBeenCalled();
+    },
+  );
+});

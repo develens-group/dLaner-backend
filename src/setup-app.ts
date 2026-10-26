@@ -20,6 +20,7 @@ export function setupApplication(app: NestExpressApplication) {
       },
     }),
   );
+  app.useBodyParser('json', { limit: '2mb' });
   app.use(cookieParser());
   app.useGlobalPipes(
     new ValidationPipe({
@@ -47,6 +48,9 @@ export function setupApplication(app: NestExpressApplication) {
       'Accept',
       'Origin',
       'X-Requested-With',
+      'MCP-Protocol-Version',
+      'Mcp-Session-Id',
+      'Last-Event-ID',
     ],
   });
   const swaggerConfig = new DocumentBuilder()
