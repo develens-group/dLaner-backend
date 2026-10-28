@@ -47,6 +47,15 @@ const publicUser = (user: User) => ({
   updatedAt: user.updatedAt,
 });
 
+/**
+ * How long a rotated refresh token is still accepted. Covers concurrent
+ * refreshes from multiple tabs (and retries after a slow response) without
+ * weakening reuse detection beyond a one-minute window.
+ */
+const REFRESH_REUSE_GRACE_MS = 60_000;
+
+type SessionWithUser = Prisma.SessionGetPayload<{ include: { user: true } }>;
+
 @Injectable()
 export class AuthService {
   constructor(
@@ -306,7 +315,12 @@ export class AuthService {
     return this.config.get<number>('CAPTCHA_FAILURE_THRESHOLD', 2);
   }
 
-  async refresh(rawToken: string, installationKey?: string, siteUrl?: string) {
+  async refresh(
+    rawToken: string,
+    installationKey?: string,
+    siteUrl?: string,
+    options?: { rotateInGrace?: boolean },
+  ) {
     let claims: JwtClaims;
     try {
       claims = await this.jwt.verifyAsync(rawToken, {
@@ -349,18 +363,48 @@ export class AuthService {
           .verify(session.refreshTokenHash, rawToken)
           .catch(() => false);
         if (!matches) {
-          await tx.session.update({
-            where: { id: session.id },
-            data: { revokedAt: new Date() },
-          });
-          return null;
+          // A request can still carry the token that was rotated moments ago
+          // (second tab, retried request, slow response). Treat that as a race
+          // instead of revoking the whole session.
+          const inGrace = await this.withinRotationGrace(session, rawToken);
+          if (!inGrace) {
+            await tx.session.update({
+              where: { id: session.id },
+              data: { revokedAt: new Date() },
+            });
+            return null;
+          }
+          // Cookie transport shares one cookie jar across tabs, so rotating is
+          // safe here and lets the caller re-issue the cookie. WordPress
+          // clients always get a rotated pair (they may store it blindly).
+          const rotateInGrace =
+            options?.rotateInGrace ||
+            session.clientType === SessionClientType.WORDPRESS;
+          if (!rotateInGrace) {
+            // Body transport: every tab reads and writes the same storage, so
+            // the tab that won the race already stored the rotated token.
+            // Return an access token only; echoing the stale refresh token
+            // back would overwrite it and start a rotation ping-pong.
+            await tx.session.update({
+              where: { id: session.id },
+              data: {
+                lastUsedAt: new Date(),
+                expiresAt: this.expiry('JWT_REFRESH_EXPIRES_IN'),
+              },
+            });
+            return {
+              accessToken: await this.signAccessToken(
+                session.user,
+                session.id,
+                this.tokenClient(session.clientType),
+              ),
+            };
+          }
         }
         const tokens = await this.issueTokens(
           session.user,
           session.id,
-          session.clientType === SessionClientType.WORDPRESS
-            ? 'wordpress'
-            : 'web',
+          this.tokenClient(session.clientType),
         );
         const changed = await tx.session.updateMany({
           where: {
@@ -369,8 +413,13 @@ export class AuthService {
             revokedAt: null,
           },
           data: {
+            prevRefreshTokenHash: session.refreshTokenHash,
+            prevRefreshTokenAt: new Date(),
             refreshTokenHash: await argon2.hash(tokens.refreshToken),
             lastUsedAt: new Date(),
+            // Sliding window: active users never fall off at the original
+            // 30-day mark.
+            expiresAt: this.expiry('JWT_REFRESH_EXPIRES_IN'),
           },
         });
         if (!changed.count)
@@ -494,20 +543,7 @@ export class AuthService {
   ) {
     const base = { sub: user.id, sid: sessionId };
     const [accessToken, refreshToken] = await Promise.all([
-      this.jwt.signAsync(
-        {
-          ...base,
-          type: 'access',
-          role: user.role,
-          plan: user.plan,
-          email: user.email,
-          client,
-        },
-        {
-          secret: this.config.getOrThrow('JWT_ACCESS_SECRET'),
-          expiresIn: this.config.getOrThrow('JWT_ACCESS_EXPIRES_IN'),
-        },
-      ),
+      this.signAccessToken(user, sessionId, client),
       this.jwt.signAsync(
         { ...base, type: 'refresh', client },
         {
@@ -517,6 +553,45 @@ export class AuthService {
       ),
     ]);
     return { accessToken, refreshToken };
+  }
+  private signAccessToken(
+    user: User,
+    sessionId: string,
+    client: 'web' | 'wordpress' = 'web',
+  ) {
+    return this.jwt.signAsync(
+      {
+        sub: user.id,
+        sid: sessionId,
+        type: 'access',
+        role: user.role,
+        plan: user.plan,
+        email: user.email,
+        client,
+      },
+      {
+        secret: this.config.getOrThrow('JWT_ACCESS_SECRET'),
+        expiresIn: this.config.getOrThrow('JWT_ACCESS_EXPIRES_IN'),
+      },
+    );
+  }
+  private tokenClient(clientType: SessionClientType): 'web' | 'wordpress' {
+    return clientType === SessionClientType.WORDPRESS ? 'wordpress' : 'web';
+  }
+  private async withinRotationGrace(
+    session: Pick<SessionWithUser, 'prevRefreshTokenHash' | 'prevRefreshTokenAt'>,
+    rawToken: string,
+  ) {
+    if (!session.prevRefreshTokenHash || !session.prevRefreshTokenAt)
+      return false;
+    if (
+      Date.now() - session.prevRefreshTokenAt.getTime() >
+      REFRESH_REUSE_GRACE_MS
+    )
+      return false;
+    return argon2
+      .verify(session.prevRefreshTokenHash, rawToken)
+      .catch(() => false);
   }
   private async revokeAll(userId: string) {
     await this.prisma.session.updateMany({

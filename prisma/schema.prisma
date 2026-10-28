@@ -168,41 +168,41 @@ enum PaymentAttemptStatus {
 }
 
 model User {
-  id                  String                   @id @default(uuid()) @db.Uuid
-  email               String                   @unique @db.VarChar(320)
-  passwordHash        String
-  displayName         String?                  @db.VarChar(100)
-  role                UserRole                 @default(USER)
-  plan                UserPlan                 @default(FREE)
-  status              UserStatus               @default(PENDING_VERIFICATION)
-  emailVerifiedAt     DateTime?
-  lastLoginAt         DateTime?
-  createdAt           DateTime                 @default(now())
-  updatedAt           DateTime                 @updatedAt
-  deletedAt           DateTime?
-  sessions            Session[]
+  id                          String                       @id @default(uuid()) @db.Uuid
+  email                       String                       @unique @db.VarChar(320)
+  passwordHash                String
+  displayName                 String?                      @db.VarChar(100)
+  role                        UserRole                     @default(USER)
+  plan                        UserPlan                     @default(FREE)
+  status                      UserStatus                   @default(PENDING_VERIFICATION)
+  emailVerifiedAt             DateTime?
+  lastLoginAt                 DateTime?
+  createdAt                   DateTime                     @default(now())
+  updatedAt                   DateTime                     @updatedAt
+  deletedAt                   DateTime?
+  sessions                    Session[]
   wordpressSites              WordPressSite[]
   wordpressConnectionRequests WordPressConnectionRequest[]
   wordpressEditSessions       WordPressEditSession[]
   verificationTokens          EmailVerificationToken[]
-  passwordResetTokens PasswordResetToken[]
-  apiRequests         ApiRequestRecord[]
-  aiRequests          AiRequest[]
-  aiCredentials       UserAiCredential[]
-  auditLogs           AuditLog[]               @relation("AuditActor")
-  creditAccount       CreditAccount?
-  creditLedger        CreditLedgerEntry[]      @relation("LedgerOwner")
-  createdCreditLedger CreditLedgerEntry[]      @relation("LedgerCreator")
-  creditReservations  CreditReservation[]
-  creditOrders        CreditPurchaseOrder[]
-  subscriptions       UserSubscription[]
-  subscriptionOrders  SubscriptionOrder[]
-  templates           Template[]               @relation("TemplateOwner")
-  templateVersions    TemplateVersion[]        @relation("TemplateVersionCreator")
-  templateReviews     TemplateReview[]         @relation("TemplateReviewer")
-  templateMetrics     TemplateMetric[]
-  lands               Land[]                    @relation("LandOwner")
-  landRevisions       LandRevision[]            @relation("LandRevisionCreator")
+  passwordResetTokens         PasswordResetToken[]
+  apiRequests                 ApiRequestRecord[]
+  aiRequests                  AiRequest[]
+  aiCredentials               UserAiCredential[]
+  auditLogs                   AuditLog[]                   @relation("AuditActor")
+  creditAccount               CreditAccount?
+  creditLedger                CreditLedgerEntry[]          @relation("LedgerOwner")
+  createdCreditLedger         CreditLedgerEntry[]          @relation("LedgerCreator")
+  creditReservations          CreditReservation[]
+  creditOrders                CreditPurchaseOrder[]
+  subscriptions               UserSubscription[]
+  subscriptionOrders          SubscriptionOrder[]
+  templates                   Template[]                   @relation("TemplateOwner")
+  templateVersions            TemplateVersion[]            @relation("TemplateVersionCreator")
+  templateReviews             TemplateReview[]             @relation("TemplateReviewer")
+  templateMetrics             TemplateMetric[]
+  lands                       Land[]                       @relation("LandOwner")
+  landRevisions               LandRevision[]               @relation("LandRevisionCreator")
 
   @@index([status])
   @@index([plan])
@@ -225,17 +225,17 @@ model Land {
 }
 
 model LandRevision {
-  id            String   @id @default(uuid()) @db.Uuid
-  landId        String   @db.Uuid
-  revision      Int
-  storageKey    String   @unique @db.VarChar(500)
-  contentHash   String   @db.VarChar(64)
-  sizeBytes     Int
-  createdById   String   @db.Uuid
-  createdAt     DateTime @default(now())
-  land          Land     @relation("LandRevisions", fields: [landId], references: [id], onDelete: Cascade)
-  currentFor    Land?    @relation("CurrentLandRevision")
-  createdBy     User     @relation("LandRevisionCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  id          String   @id @default(uuid()) @db.Uuid
+  landId      String   @db.Uuid
+  revision    Int
+  storageKey  String   @unique @db.VarChar(500)
+  contentHash String   @db.VarChar(64)
+  sizeBytes   Int
+  createdById String   @db.Uuid
+  createdAt   DateTime @default(now())
+  land        Land     @relation("LandRevisions", fields: [landId], references: [id], onDelete: Cascade)
+  currentFor  Land?    @relation("CurrentLandRevision")
+  createdBy   User     @relation("LandRevisionCreator", fields: [createdById], references: [id], onDelete: Restrict)
 
   @@unique([landId, revision])
   @@index([landId, createdAt])
@@ -458,20 +458,20 @@ model AiRequest {
 }
 
 model UserAiCredential {
-  id           String             @id @default(uuid()) @db.Uuid
-  userId       String             @db.Uuid
-  provider     String             @db.VarChar(100)
-  label        String?            @db.VarChar(100)
-  apiKeyEnc    String
-  keyHint      String             @db.VarChar(32)
-  isDefault    Boolean            @default(false)
-  status       AiCredentialStatus @default(ACTIVE)
-  lastUsedAt   DateTime?
-  lastError    String?            @db.VarChar(500)
-  createdAt    DateTime           @default(now())
-  updatedAt    DateTime           @updatedAt
-  user         User               @relation(fields: [userId], references: [id], onDelete: Cascade)
-  aiRequests   AiRequest[]
+  id         String             @id @default(uuid()) @db.Uuid
+  userId     String             @db.Uuid
+  provider   String             @db.VarChar(100)
+  label      String?            @db.VarChar(100)
+  apiKeyEnc  String
+  keyHint    String             @db.VarChar(32)
+  isDefault  Boolean            @default(false)
+  status     AiCredentialStatus @default(ACTIVE)
+  lastUsedAt DateTime?
+  lastError  String?            @db.VarChar(500)
+  createdAt  DateTime           @default(now())
+  updatedAt  DateTime           @updatedAt
+  user       User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  aiRequests AiRequest[]
 
   @@index([userId, provider])
   @@index([userId, isDefault])
@@ -479,14 +479,14 @@ model UserAiCredential {
 
 /// Catalog type exposed to users (e.g. remove-background). Independent of fake AI.
 model AiOperationType {
-  id          String               @id @default(uuid()) @db.Uuid
-  slug        String               @unique @db.VarChar(100)
-  label       String               @db.VarChar(150)
-  description String?              @db.VarChar(1000)
-  isActive    Boolean              @default(true)
-  sortOrder   Int                  @default(0)
-  createdAt   DateTime             @default(now())
-  updatedAt   DateTime             @updatedAt
+  id          String              @id @default(uuid()) @db.Uuid
+  slug        String              @unique @db.VarChar(100)
+  label       String              @db.VarChar(150)
+  description String?             @db.VarChar(1000)
+  isActive    Boolean             @default(true)
+  sortOrder   Int                 @default(0)
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
   variants    AiProviderVariant[]
 
   @@index([isActive, sortOrder])
@@ -494,20 +494,20 @@ model AiOperationType {
 
 /// Concrete provider/model under a type. creditCost is DECIMAL credits (up to 18 places).
 model AiProviderVariant {
-  id             String          @id @default(uuid()) @db.Uuid
-  typeId         String          @db.Uuid
-  provider       String          @db.VarChar(100)
-  externalModel  String          @db.VarChar(255)
-  label          String          @db.VarChar(150)
-  creditCost     Decimal         @db.Decimal(36, 18)
-  priority       Int             @default(100)
-  isDefault      Boolean         @default(false)
-  isActive       Boolean         @default(true)
-  configJson     Json?
-  createdAt      DateTime        @default(now())
-  updatedAt      DateTime        @updatedAt
-  type           AiOperationType @relation(fields: [typeId], references: [id], onDelete: Cascade)
-  aiRequests     AiRequest[]
+  id            String          @id @default(uuid()) @db.Uuid
+  typeId        String          @db.Uuid
+  provider      String          @db.VarChar(100)
+  externalModel String          @db.VarChar(255)
+  label         String          @db.VarChar(150)
+  creditCost    Decimal         @db.Decimal(36, 18)
+  priority      Int             @default(100)
+  isDefault     Boolean         @default(false)
+  isActive      Boolean         @default(true)
+  configJson    Json?
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  type          AiOperationType @relation(fields: [typeId], references: [id], onDelete: Cascade)
+  aiRequests    AiRequest[]
 
   @@index([typeId, isActive])
   @@index([typeId, isDefault])
@@ -695,20 +695,24 @@ model AuditLog {
 }
 
 model Session {
-  id               String            @id @default(uuid()) @db.Uuid
-  userId           String            @db.Uuid
-  clientType       SessionClientType @default(WEB)
-  wordpressSiteId  String?           @db.Uuid
-  refreshTokenHash String
-  userAgent        String?           @db.VarChar(512)
-  ipAddress        String?           @db.VarChar(64)
-  deviceName       String?           @db.VarChar(100)
-  expiresAt        DateTime
-  lastUsedAt       DateTime          @default(now())
-  revokedAt        DateTime?
-  createdAt        DateTime          @default(now())
-  user             User              @relation(fields: [userId], references: [id], onDelete: Restrict)
-  wordpressSite    WordPressSite?    @relation(fields: [wordpressSiteId], references: [id], onDelete: SetNull)
+  id                   String            @id @default(uuid()) @db.Uuid
+  userId               String            @db.Uuid
+  clientType           SessionClientType @default(WEB)
+  wordpressSiteId      String?           @db.Uuid
+  refreshTokenHash     String
+  // Kept for a short grace window after rotation so a concurrent request from
+  // another tab is treated as a race instead of token reuse.
+  prevRefreshTokenHash String?
+  prevRefreshTokenAt   DateTime?
+  userAgent            String?           @db.VarChar(512)
+  ipAddress            String?           @db.VarChar(64)
+  deviceName           String?           @db.VarChar(100)
+  expiresAt            DateTime
+  lastUsedAt           DateTime          @default(now())
+  revokedAt            DateTime?
+  createdAt            DateTime          @default(now())
+  user                 User              @relation(fields: [userId], references: [id], onDelete: Restrict)
+  wordpressSite        WordPressSite?    @relation(fields: [wordpressSiteId], references: [id], onDelete: SetNull)
 
   @@index([userId, revokedAt])
   @@index([expiresAt])
@@ -778,15 +782,15 @@ model WordPressEditSession {
 }
 
 model WordPressEditAsset {
-  id            String              @id @default(uuid()) @db.Uuid
-  editSessionId String              @db.Uuid
-  direction     String              @db.VarChar(16)
-  kind          String              @db.VarChar(16)
-  storageKey    String              @db.VarChar(512)
-  contentType   String              @db.VarChar(128)
+  id            String               @id @default(uuid()) @db.Uuid
+  editSessionId String               @db.Uuid
+  direction     String               @db.VarChar(16)
+  kind          String               @db.VarChar(16)
+  storageKey    String               @db.VarChar(512)
+  contentType   String               @db.VarChar(128)
   byteSize      Int
-  originalName  String?             @db.VarChar(255)
-  createdAt     DateTime            @default(now())
+  originalName  String?              @db.VarChar(255)
+  createdAt     DateTime             @default(now())
   editSession   WordPressEditSession @relation(fields: [editSessionId], references: [id], onDelete: Cascade)
 
   @@index([editSessionId, direction, createdAt])
@@ -847,7 +851,7 @@ model SubscriptionPlan {
   userPlan             UserPlan
   interval             SubscriptionInterval?
   priceMinor           Int                   @default(0)
-  currency             String                @db.VarChar(3) @default("USD")
+  currency             String                @default("USD") @db.VarChar(3)
   storageBytesLimit    BigInt
   includedCreditAmount Decimal               @db.Decimal(36, 18)
   isActive             Boolean               @default(true)
@@ -880,24 +884,24 @@ model UserSubscription {
 }
 
 model SubscriptionOrder {
-  id                String            @id @default(uuid()) @db.Uuid
-  userId            String            @db.Uuid
-  planId            String            @db.Uuid
-  status            CreditOrderStatus @default(CREATED)
+  id                String                       @id @default(uuid()) @db.Uuid
+  userId            String                       @db.Uuid
+  planId            String                       @db.Uuid
+  status            CreditOrderStatus            @default(CREATED)
   priceMinor        Int
-  currency          String            @db.VarChar(3)
-  paymentProvider   String            @db.VarChar(100)
-  providerPaymentId String?           @db.VarChar(255)
-  idempotencyKey    String            @db.VarChar(128)
-  requestHash       String            @db.VarChar(64)
+  currency          String                       @db.VarChar(3)
+  paymentProvider   String                       @db.VarChar(100)
+  providerPaymentId String?                      @db.VarChar(255)
+  idempotencyKey    String                       @db.VarChar(128)
+  requestHash       String                       @db.VarChar(64)
   paidAt            DateTime?
   failedAt          DateTime?
   cancelledAt       DateTime?
   expiresAt         DateTime?
-  createdAt         DateTime          @default(now())
-  updatedAt         DateTime          @updatedAt
-  user              User              @relation(fields: [userId], references: [id], onDelete: Restrict)
-  plan              SubscriptionPlan  @relation(fields: [planId], references: [id], onDelete: Restrict)
+  createdAt         DateTime                     @default(now())
+  updatedAt         DateTime                     @updatedAt
+  user              User                         @relation(fields: [userId], references: [id], onDelete: Restrict)
+  plan              SubscriptionPlan             @relation(fields: [planId], references: [id], onDelete: Restrict)
   paymentAttempts   SubscriptionPaymentAttempt[]
 
   @@unique([userId, idempotencyKey])
@@ -924,7 +928,6 @@ model SubscriptionPaymentAttempt {
   @@index([orderId, createdAt])
   @@index([provider, providerPaymentId])
 }
-
 
 /// Guest MCP output. Raw access tokens are never persisted.
 model McpDesign {

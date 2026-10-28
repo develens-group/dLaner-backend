@@ -100,6 +100,7 @@ export class AuthController {
           raw,
           req.get('x-dlander-installation-key'),
           req.get('x-dlander-site-url'),
+          { rotateInGrace: this.isCookie() },
         ),
         res,
       ),
@@ -156,9 +157,11 @@ export class AuthController {
   }
 
   private transportTokens<
-    T extends { accessToken: string; refreshToken: string },
+    T extends { accessToken: string; refreshToken?: string },
   >(result: T, res: Response) {
-    if (!this.isCookie()) return result;
+    // A grace-window refresh returns an access token only (the caller already
+    // holds the rotated refresh token), so there is nothing to set here.
+    if (!this.isCookie() || !result.refreshToken) return result;
     res.cookie(this.cookieName(), result.refreshToken, {
       httpOnly: true,
       secure: true,
