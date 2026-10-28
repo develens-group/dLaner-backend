@@ -22,6 +22,7 @@ import { HealthController } from './health.controller';
 import { TemplatesModule } from './templates/templates.module';
 import { WordPressModule } from './wordpress/wordpress.module';
 import { LandsModule } from './lands/lands.module';
+import { McpModule } from './mcp/mcp.module';
 
 @Module({
   imports: [
@@ -40,6 +41,7 @@ import { LandsModule } from './lands/lands.module';
     TemplatesModule,
     WordPressModule,
     LandsModule,
+    McpModule,
   ],
   controllers: [AppController, HealthController],
   providers: [

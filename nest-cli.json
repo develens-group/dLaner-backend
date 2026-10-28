@@ -9,6 +9,11 @@
         "include": "assets/docs/*.pdf",
         "outDir": "dist",
         "watchAssets": true
+      },
+      {
+        "include": "mcp/design-guide.txt",
+        "outDir": "dist",
+        "watchAssets": true
       }
     ]
   }
