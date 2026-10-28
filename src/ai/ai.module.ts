@@ -33,6 +33,8 @@ import {
 import { GoogleImageProvider } from './providers/google-image.provider';
 import { OpenAiImageProvider } from './providers/openai-image.provider';
 import { OpenAiProvider } from './providers/openai.provider';
+import { XaiImageProvider } from './providers/xai-image.provider';
+import { XaiProvider } from './providers/xai.provider';
 
 @Module({
   imports: [CreditsModule, TemplatesModule],
@@ -50,6 +52,7 @@ import { OpenAiProvider } from './providers/openai.provider';
     OpenAiProvider,
     AnthropicProvider,
     GoogleProvider,
+    XaiProvider,
     AiCatalogService,
     AiCredentialsService,
     AiProviderRegistry,
@@ -60,6 +63,7 @@ import { OpenAiProvider } from './providers/openai.provider';
     ReplicateImageProvider,
     OpenAiImageProvider,
     GoogleImageProvider,
+    XaiImageProvider,
     ImageProviderRegistry,
     {
       provide: AI_HISTORY_STORE,

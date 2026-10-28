@@ -4,6 +4,7 @@ import { MockAiProvider } from './mock-ai.provider';
 import { AnthropicProvider } from './providers/anthropic.provider';
 import { GoogleProvider } from './providers/google.provider';
 import { OpenAiProvider } from './providers/openai.provider';
+import { XaiProvider } from './providers/xai.provider';
 
 @Injectable()
 export class AiProviderRegistry {
@@ -14,9 +15,10 @@ export class AiProviderRegistry {
     openai: OpenAiProvider,
     anthropic: AnthropicProvider,
     google: GoogleProvider,
+    xai: XaiProvider,
   ) {
     // Real providers stay registered for BYOK even without platform keys.
-    for (const provider of [openai, anthropic, google]) {
+    for (const provider of [openai, anthropic, google, xai]) {
       this.providers.set(provider.name, provider);
     }
     if (mock.isConfigured()) this.providers.set(mock.name, mock);

@@ -141,8 +141,13 @@ export class AiOperationsExecuteService {
     input: ImageExecuteInput,
   ) {
     const normalized = provider.toLowerCase();
-    if (normalized !== 'openai' && normalized !== 'google') return;
-    const label = normalized === 'google' ? 'Google' : 'OpenAI';
+    if (!['openai', 'google', 'xai'].includes(normalized)) return;
+    const label =
+      normalized === 'google'
+        ? 'Google'
+        : normalized === 'xai'
+          ? 'xAI'
+          : 'OpenAI';
     if (!input.prompt?.trim()) {
       throw new BadRequestException({
         code: 'PROMPT_REQUIRED',
@@ -302,9 +307,10 @@ export class AiOperationsExecuteService {
       ).slice(0, 500);
       if (resolved) {
         // Only invalidate the user's key for auth-like provider failures.
-        await (isProviderAuthError(error)
-          ? this.credentials.markUsed(resolved.credential.id, message)
-          : this.credentials.markUsed(resolved.credential.id)
+        await (
+          isProviderAuthError(error)
+            ? this.credentials.markUsed(resolved.credential.id, message)
+            : this.credentials.markUsed(resolved.credential.id)
         ).catch(() => undefined);
       }
       await this.prisma.aiRequest.update({

@@ -73,6 +73,25 @@ export async function listByokModels(
       const image = Array.from(new Set([...imageDefaults, ...fromApi]));
       return [...chat.sort(), ...image].map((id) => ({ id, label: id }));
     }
+    case 'xai': {
+      // OpenAI-compatible: https://api.x.ai/v1/models
+      const body = await providerFetch<{
+        data?: Array<{ id?: string }>;
+      }>(
+        'https://api.x.ai/v1/models',
+        {
+          method: 'GET',
+          headers: { Authorization: `Bearer ${key}` },
+        },
+        'xai',
+      );
+      return (body.data ?? [])
+        .map((item) => item.id?.trim())
+        .filter((id): id is string => !!id)
+        .filter((id) => !/embedding/i.test(id))
+        .sort()
+        .map((id) => ({ id, label: id }));
+    }
     case 'anthropic': {
       const body = await providerFetch<{
         data?: Array<{ id?: string; display_name?: string }>;

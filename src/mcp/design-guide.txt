@@ -20,7 +20,7 @@ Every response must use this root structure:
 - `elements` is ordered back-to-front. The first element is the bottom layer and the last element is the top layer.
 - There is no fixed maximum number of elements. Choose as many elements as needed to fully satisfy the user's request and produce a complete, polished design.
 - For complex pages, multiple sections, multiple variants, or many components, include all necessary elements without simplifying or omitting requested content to meet an element-count limit.
-- `files` must be `{}` unless real image file data was supplied.
+- `files` must be `{}` in a `create_design` call. Image data is only allowed in the chat hand-off described in the IMAGE section, which never reaches the connector.
 - Every element ID must be a fresh UUID v4 string generated for this response (for example, `b7e2c491-6ad8-4f30-9c15-82d047eab563`). Never use bare descriptive IDs such as `frame_main`, `card_1`, or `title_1`, sequential counters, or IDs copied from examples, earlier responses, or existing canvas elements. Use fresh IDs even when generating the same design again, to avoid collisions when scenes are combined on a canvas.
 - `x` and `y` are canvas coordinates in pixels. The origin is top-left; x increases rightward and y increases downward.
 - Never emit `NaN`, `Infinity`, `undefined`, comments, or trailing commas.
@@ -342,10 +342,23 @@ Rules:
 
 IMAGE
 =====
-Generate an image only when a valid `fileId` and matching file data are available. The only required image-specific field is:
-- `fileId`
+There are two ways to deliver a design. Pick the one that matches this conversation:
 
-Everything else (`status`, `crop`, `compile`, etc.) is filled in by the system. Without real file data, create a styled placeholder rectangle instead of an image.
+1. Connector (`create_design`): images are NOT accepted. `files` must be `{}` and no element may use `type="image"`. Use a styled placeholder rectangle instead, or switch to path 2.
+2. Chat hand-off (paste): print the complete JSON in the chat instead of calling `create_design`, adding each image as an `"image"` element plus a matching entry in `files`:
+
+   "files": {
+     "<fileId>": { "id": "<fileId>", "mimeType": "image/png", "dataURL": "data:image/png;base64,<base64>" }
+   }
+
+   Tell the user in one sentence to paste that JSON at `<editor>/connect/ai` and press "Open in dLander". Their browser keeps the image; it is never uploaded to their account.
+
+Rules for path 2:
+- The only required image element field is `fileId`; `width` and `height` are required too. Omit `status`, `crop`, `compile` and the rest — the system fills them in.
+- Reuse the exact same `fileId` in the element and in `files`; allocate it as a fresh UUID v4 like every other id.
+- Inline base64 only (`data:image/png|jpeg|webp|gif;base64,...`). Never a remote URL: the editor refuses to fetch third-party hosts.
+- Keep the whole JSON under 12 MB — base64 is about a third larger than the file. Prefer one or two modest images over many large ones.
+- If you cannot emit real base64 image data, do not invent it: use a styled placeholder rectangle and tell the user the image can be added in the editor afterwards.
 
 
 COMPLETE OUTPUT EXAMPLE
@@ -468,6 +481,6 @@ FINAL VALIDATION BEFORE RESPONDING
 - Every font icon has `icon=true`, a supported Material Symbols `fontFamily`, and nothing beyond `text`/`fontFamily`/`fontSize`/color fields.
 - Every line, arrow, or custom shape contains valid local `points` and omits `width`/`height`.
 - Every frame child has the correct `frameId`; the frame itself omits `frameId`.
-- No image exists without a valid `fileId` and matching file data.
+- No image exists without a valid `fileId` and matching `files` entry — and image data appears only in the chat hand-off, never in a `create_design` call.
 - No property has the value `undefined`.
 - There is no Markdown or text outside the JSON object.

@@ -7,6 +7,7 @@ import { ConfigService } from '@nestjs/config';
 import { AiProviderVariant } from '@prisma/client';
 import { GoogleImageProvider } from './google-image.provider';
 import { OpenAiImageProvider } from './openai-image.provider';
+import { XaiImageProvider } from './xai-image.provider';
 
 export interface ImageExecuteInput {
   image?: Express.Multer.File;
@@ -246,7 +247,8 @@ function formatReplicateError(
       if (item && typeof item === 'object') {
         const rec = item as Record<string, unknown>;
         const loc = Array.isArray(rec.loc) ? rec.loc.join('.') : '';
-        const msg = typeof rec.msg === 'string' ? rec.msg : JSON.stringify(item);
+        const msg =
+          typeof rec.msg === 'string' ? rec.msg : JSON.stringify(item);
         return loc ? `${loc}: ${msg}` : msg;
       }
       return JSON.stringify(item);
@@ -284,10 +286,12 @@ export class ImageProviderRegistry {
     replicate: ReplicateImageProvider,
     openai: OpenAiImageProvider,
     google: GoogleImageProvider,
+    xai: XaiImageProvider,
   ) {
     this.adapters.set(replicate.id, replicate);
     this.adapters.set(openai.id, openai);
     this.adapters.set(google.id, google);
+    this.adapters.set(xai.id, xai);
     for (const id of ['stability']) {
       this.adapters.set(id, new StubImageProvider(id));
     }

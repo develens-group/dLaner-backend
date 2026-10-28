@@ -16,7 +16,7 @@ Set these in your terminal session. **Never** commit them, paste them into ticke
 | Variable | Required | Default | Purpose |
 |----------|----------|---------|---------|
 | `SMOKE_BYOK_API_KEY` | Yes (to run smoke) | — | Real provider secret used only for create-credential + live CHAT |
-| `SMOKE_BYOK_PROVIDER` | No | `openai` | Must match a BYOK provider: `openai`, `anthropic`, or `google` |
+| `SMOKE_BYOK_PROVIDER` | No | `openai` | Must match a BYOK provider: `openai`, `anthropic`, `google`, or `xai` |
 
 Also set smoke-specific auth (not stored in git):
 
@@ -137,6 +137,7 @@ $model = switch ($provider) {
   "openai"    { "gpt-4o-mini" }
   "anthropic" { "claude-3-5-haiku-latest" }
   "google"    { "gemini-3.8-flash" }
+  "xai"       { "grok-4" }
   default     { throw "Unsupported SMOKE_BYOK_PROVIDER: $provider" }
 }
 

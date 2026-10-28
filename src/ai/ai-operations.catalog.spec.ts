@@ -24,30 +24,37 @@ describe('AiOperationsCatalogService.serialize', () => {
 
     const replicate = (
       service as unknown as {
-        serializeVariant: (v: {
-          creditCost: number;
-          provider: string;
-        }) => { supportsUserKey: boolean };
+        serializeVariant: (v: { creditCost: number; provider: string }) => {
+          supportsUserKey: boolean;
+        };
       }
     ).serializeVariant({ provider: 'replicate', creditCost: 2 });
     expect(replicate.supportsUserKey).toBe(true);
 
     const google = (
       service as unknown as {
-        serializeVariant: (v: {
-          creditCost: number;
-          provider: string;
-        }) => { supportsUserKey: boolean };
+        serializeVariant: (v: { creditCost: number; provider: string }) => {
+          supportsUserKey: boolean;
+        };
       }
     ).serializeVariant({ provider: 'google', creditCost: 2 });
     expect(google.supportsUserKey).toBe(true);
 
+    expect(providers.find((p) => p.id === 'xai')?.implemented).toBe(true);
+    const xai = (
+      service as unknown as {
+        serializeVariant: (v: { creditCost: number; provider: string }) => {
+          supportsUserKey: boolean;
+        };
+      }
+    ).serializeVariant({ provider: 'xai', creditCost: 2 });
+    expect(xai.supportsUserKey).toBe(true);
+
     const stability = (
       service as unknown as {
-        serializeVariant: (v: {
-          creditCost: number;
-          provider: string;
-        }) => { supportsUserKey: boolean };
+        serializeVariant: (v: { creditCost: number; provider: string }) => {
+          supportsUserKey: boolean;
+        };
       }
     ).serializeVariant({ provider: 'stability', creditCost: 2 });
     expect(stability.supportsUserKey).toBe(false);

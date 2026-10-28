@@ -36,9 +36,15 @@ function resolveMode(
 
 @Injectable()
 export class OpenAiImageProvider implements ImageProviderAdapter {
-  readonly id = 'openai';
+  readonly id: string = 'openai';
 
-  constructor(private readonly config: ConfigService) {}
+  /** Overridable so OpenAI-compatible providers (e.g. xAI) can reuse this. */
+  protected readonly label: string = 'OpenAI';
+  protected readonly baseUrl: string = 'https://api.openai.com/v1';
+  protected readonly envKey: string = 'OPENAI_API_KEY';
+  protected readonly supportsEdits: boolean = true;
+
+  constructor(protected readonly config: ConfigService) {}
 
   async execute(
     variant: AiProviderVariant,
@@ -47,11 +53,11 @@ export class OpenAiImageProvider implements ImageProviderAdapter {
   ): Promise<ImageExecuteResult> {
     const apiKey =
       options?.apiKey?.trim() ||
-      this.config.get<string>('OPENAI_API_KEY', '')?.trim();
+      this.config.get<string>(this.envKey, '')?.trim();
     if (!apiKey)
       throw new ServiceUnavailableException({
         code: 'PROVIDER_NOT_CONFIGURED',
-        message: 'OPENAI_API_KEY is not configured',
+        message: `${this.envKey} is not configured`,
       });
 
     const mode = resolveMode(variant, input);
@@ -59,14 +65,19 @@ export class OpenAiImageProvider implements ImageProviderAdapter {
     if (!prompt)
       throw new BadRequestException({
         code: 'PROMPT_REQUIRED',
-        message: 'A non-empty prompt is required for OpenAI image operations',
+        message: `A non-empty prompt is required for ${this.label} image operations`,
       });
 
     if (mode === 'edits') {
+      if (!this.supportsEdits)
+        throw new BadRequestException({
+          code: 'BYOK_NOT_SUPPORTED',
+          message: `${this.label} does not support image edits`,
+        });
       if (!input.image?.buffer?.length)
         throw new BadRequestException({
           code: 'IMAGE_REQUIRED',
-          message: 'An input image is required for OpenAI image edits',
+          message: `An input image is required for ${this.label} image edits`,
         });
       return this.runEdits(variant, input, apiKey, prompt);
     }
@@ -88,7 +99,7 @@ export class OpenAiImageProvider implements ImageProviderAdapter {
         ? (config.defaults as Record<string, unknown>)
         : {};
 
-    const res = await fetch('https://api.openai.com/v1/images/generations', {
+    const res = await fetch(`${this.baseUrl}/images/generations`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${apiKey}`,
@@ -136,7 +147,7 @@ export class OpenAiImageProvider implements ImageProviderAdapter {
       form.append(key, String(value));
     }
 
-    const res = await fetch('https://api.openai.com/v1/images/edits', {
+    const res = await fetch(`${this.baseUrl}/images/edits`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${apiKey}` },
       body: form,
@@ -153,7 +164,7 @@ export class OpenAiImageProvider implements ImageProviderAdapter {
     if (!res.ok)
       throw new BadGatewayException({
         code: 'AI_PROVIDER_FAILED',
-        message: payload.error?.message || `OpenAI HTTP ${res.status}`,
+        message: payload.error?.message || `${this.label} HTTP ${res.status}`,
         providerStatus: res.status,
       });
 
@@ -164,7 +175,7 @@ export class OpenAiImageProvider implements ImageProviderAdapter {
     if (!imageUrl)
       throw new BadGatewayException({
         code: 'AI_PROVIDER_FAILED',
-        message: 'OpenAI returned no image',
+        message: `${this.label} returned no image`,
       });
 
     return { imageUrl, raw: payload };

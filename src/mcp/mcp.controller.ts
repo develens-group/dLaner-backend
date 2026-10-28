@@ -52,7 +52,7 @@ export class McpController {
       { name: 'dlander', version: '1.0.0' },
       {
         instructions:
-          'Create editable dLander designs. Read get_design_guide before designing; then call create_design and give the user the returned openUrl. No API key or dLander login is needed. Links expire in 24 hours.',
+          'Create editable dLander designs. Read get_design_guide before designing; then call create_design and give the user the returned openUrl. No API key or dLander login is needed. Links expire in 24 hours. create_design carries vector shapes and text only — for images, follow the guide’s IMAGE section and print the JSON for the /connect/ai paste box instead.',
       },
     );
     server.registerTool(
@@ -75,7 +75,7 @@ export class McpController {
       'create_design',
       {
         description:
-          'Validate and save a complete editable vector scene for 24 hours. Returns an openUrl for the dLander canvas. Send the complete revised scene for changes. No images or external fetches.',
+          'Validate and save a complete editable vector scene for 24 hours. Returns an openUrl for the dLander canvas. Send the complete revised scene for changes. Vector shapes and text only: no images, no external fetches (images use the paste hand-off in get_design_guide).',
         inputSchema: sceneShape,
         annotations: {
           readOnlyHint: false,

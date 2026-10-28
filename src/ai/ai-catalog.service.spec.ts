@@ -31,6 +31,7 @@ describe('AiCatalogService', () => {
       'openai',
       'anthropic',
       'google',
+      'xai',
     ]);
     expect(result.providers[0]).toMatchObject({
       id: 'openai',

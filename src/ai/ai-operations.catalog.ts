@@ -6,10 +6,7 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import {
-  formatCreditAmount,
-  parseCreditAmount,
-} from '../credits/credit-units';
+import { formatCreditAmount, parseCreditAmount } from '../credits/credit-units';
 import {
   CreateOperationTypeDto,
   CreateProviderVariantDto,
@@ -21,6 +18,8 @@ import { isByokImageProvider } from './ai-byok-image';
 const BUILTIN_PROVIDERS = [
   { id: 'replicate', label: 'Replicate', implemented: true },
   { id: 'openai', label: 'OpenAI', implemented: true },
+  { id: 'google', label: 'Google Gemini', implemented: true },
+  { id: 'xai', label: 'xAI Grok', implemented: true },
   { id: 'stability', label: 'Stability', implemented: false },
 ] as const;
 
@@ -33,16 +32,18 @@ export class AiOperationsCatalogService {
   }
 
   listTypes(admin = false) {
-    return this.prisma.aiOperationType.findMany({
-      where: admin ? {} : { isActive: true },
-      orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
-      include: {
-        variants: {
-          where: admin ? {} : { isActive: true },
-          orderBy: [{ priority: 'asc' }, { createdAt: 'asc' }],
+    return this.prisma.aiOperationType
+      .findMany({
+        where: admin ? {} : { isActive: true },
+        orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
+        include: {
+          variants: {
+            where: admin ? {} : { isActive: true },
+            orderBy: [{ priority: 'asc' }, { createdAt: 'asc' }],
+          },
         },
-      },
-    }).then((rows) => rows.map((t) => this.serializeType(t)));
+      })
+      .then((rows) => rows.map((t) => this.serializeType(t)));
   }
 
   async getType(id: string, admin = false) {
@@ -266,7 +267,9 @@ export class AiOperationsCatalogService {
   }
 
   private async requireType(id: string) {
-    const type = await this.prisma.aiOperationType.findUnique({ where: { id } });
+    const type = await this.prisma.aiOperationType.findUnique({
+      where: { id },
+    });
     if (!type) throw new NotFoundException('Operation type not found');
     return type;
   }
@@ -286,9 +289,9 @@ export class AiOperationsCatalogService {
       throw new BadRequestException(`Unknown provider: ${provider}`);
   }
 
-  private serializeType<T extends { variants?: Array<{ creditCost: unknown }> }>(
-    type: T,
-  ) {
+  private serializeType<
+    T extends { variants?: Array<{ creditCost: unknown }> },
+  >(type: T) {
     return {
       ...type,
       variants: (type.variants ?? []).map((v) => this.serializeVariant(v)),

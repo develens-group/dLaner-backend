@@ -56,12 +56,30 @@ export const AI_PLATFORM_CATALOG: AiProviderDefinition[] = [
       },
     ],
   },
+  {
+    id: 'xai',
+    name: 'xAI Grok',
+    models: [
+      {
+        id: 'grok-4',
+        label: 'Grok 4',
+        operations: [AiOperation.CHAT, AiOperation.TEXT_GENERATION],
+      },
+      {
+        id: 'grok-3-mini',
+        label: 'Grok 3 Mini',
+        operations: [AiOperation.CHAT, AiOperation.TEXT_GENERATION],
+      },
+    ],
+  },
 ];
 
 export const AI_PROVIDER_ENV_KEYS: Record<string, string> = {
   openai: 'OPENAI_API_KEY',
   anthropic: 'ANTHROPIC_API_KEY',
   google: 'GOOGLE_AI_API_KEY',
+  /** OpenAI-compatible API: https://api.x.ai/v1 */
+  xai: 'XAI_API_KEY',
   /** Image BYOK only — not listed in text AI_PLATFORM_CATALOG. */
   replicate: 'REPLICATE_API_TOKEN',
 };

@@ -1,6 +1,7 @@
 export const BYOK_IMAGE_PROVIDERS = new Set<string>([
   'openai',
   'google',
+  'xai',
   'replicate',
 ]);
 
