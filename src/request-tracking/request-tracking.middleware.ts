@@ -21,6 +21,14 @@ export class RequestTrackingMiddleware implements NestMiddleware {
     private readonly config: ConfigService,
   ) {}
   use(req: TrackedRequest, res: TrackedResponse, next: NextFunction) {
+    if (
+      req.path === '/mcp' ||
+      req.path === '/mcp/' ||
+      req.path?.startsWith('/api/v1/mcp/designs/')
+    ) {
+      next();
+      return;
+    }
     const requestId = resolveRequestId(req.get('x-request-id'));
     req.requestId = requestId;
     res.setHeader('X-Request-Id', requestId);

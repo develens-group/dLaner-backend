@@ -924,3 +924,16 @@ model SubscriptionPaymentAttempt {
   @@index([orderId, createdAt])
   @@index([provider, providerPaymentId])
 }
+
+
+/// Guest MCP output. Raw access tokens are never persisted.
+model McpDesign {
+  id        String   @id @default(uuid())
+  tokenHash String   @unique @db.VarChar(64)
+  payload   Json
+  sizeBytes Int
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+
+  @@index([expiresAt])
+}
