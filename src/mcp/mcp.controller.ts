@@ -16,6 +16,13 @@ import { Public } from '../common/decorators';
 import { McpService } from './mcp.service';
 import { sceneShape } from './scene-schema';
 
+const escapeHtml = (value: string) =>
+  value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+
 @Public()
 @Controller()
 export class McpController {
@@ -24,6 +31,66 @@ export class McpController {
     private readonly config: ConfigService,
   ) {}
 
+  /**
+   * Landing page for people who paste the endpoint into a browser.
+   *
+   * MCP clients always POST (or open an SSE stream with `Accept:
+   * text/event-stream`); a plain browser navigation only produces the
+   * "Use POST" JSON-RPC error, which reads like a broken deployment. Browsers
+   * are the only callers sending `Accept: text/html`, so they get a short
+   * explanation instead — every real client still sees the JSON-RPC error.
+   */
+  private browserLandingPage(req: Request) {
+    const editor = (this.config.get<string>('MCP_EDITOR_URL') ?? '')
+      .trim()
+      .replace(/\/+$/, '');
+    const proto = (req.headers['x-forwarded-proto'] as string) || req.protocol;
+    const host = req.headers.host ?? '';
+    const endpoint = host
+      ? `${proto}://${host}${req.originalUrl}`
+      : req.originalUrl;
+    const link = editor ? `${editor}/connect/ai` : '';
+    return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>dLander MCP endpoint</title>
+<style>
+:root{color-scheme:light dark}
+body{margin:0;min-height:100vh;display:grid;place-items:center;padding:32px;
+font:16px/1.6 ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
+background:#f6f7fb;color:#1b1b1f}
+main{max-width:560px}
+h1{font-size:22px;line-height:1.3;margin:0 0 16px}
+p{margin:0 0 12px;color:#4a4a55}
+code{background:#e9ebf2;border-radius:6px;padding:2px 6px;font-size:13px;word-break:break-all}
+a{color:#3b5bdb}
+.note{margin-top:20px;padding:12px 14px;border-left:3px solid #3b5bdb;background:#fff;border-radius:8px;color:#1b1b1f}
+@media (prefers-color-scheme:dark){
+body{background:#121216;color:#eceef5}
+p{color:#a8aab8}
+code{background:#23242c}
+.note{background:#1a1b22;color:#eceef5}
+a{color:#8fa6ff}
+}
+</style>
+</head>
+<body>
+<main>
+<h1>This is a dLander MCP endpoint</h1>
+<p>It speaks <strong>Streamable HTTP</strong> and only answers <code>POST</code>
+requests from an MCP client. Seeing this page in a browser is expected — the
+endpoint is not a website.</p>
+<p>Endpoint: <code>${escapeHtml(endpoint)}</code></p>
+<div class="note">Add it to ChatGPT, Claude, Cursor or any MCP-capable assistant
+as a remote MCP server, choose “No authentication”, then ask for a design.
+${link ? `<a href="${escapeHtml(link)}">Setup guide</a>` : ''}</div>
+</main>
+</body>
+</html>`;
+  }
+
   @All('mcp')
   @Throttle({ default: { limit: 30, ttl: 60000 } })
   async handle(@Req() req: Request, @Res() res: Response) {
@@ -31,6 +98,13 @@ export class McpController {
     res.setHeader('Cache-Control', 'no-store');
     if (req.method !== 'POST') {
       res.setHeader('Allow', 'POST');
+      if (
+        req.method === 'GET' &&
+        (req.headers.accept ?? '').includes('text/html')
+      ) {
+        res.setHeader('X-Robots-Tag', 'noindex');
+        return res.status(200).type('html').send(this.browserLandingPage(req));
+      }
       return res.status(405).json({
         jsonrpc: '2.0',
         id: null,
