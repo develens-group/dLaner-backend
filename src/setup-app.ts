@@ -1,4 +1,5 @@
 import { ValidationPipe } from '@nestjs/common';
+import type { CorsOptionsCallback } from '@nestjs/common/interfaces/external/cors-options.interface';
 import { ConfigService } from '@nestjs/config';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { DocumentBuilder, OpenAPIObject, SwaggerModule } from '@nestjs/swagger';
@@ -37,22 +38,43 @@ export function setupApplication(app: NestExpressApplication) {
     .split(',')
     .map((origin) => origin.trim())
     .filter(Boolean);
-  app.enableCors({
-    origin: corsOrigins,
-    credentials: true,
-    methods: ['GET', 'HEAD', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: [
-      'Content-Type',
-      'Authorization',
-      'Idempotency-Key',
-      'Accept',
-      'Origin',
-      'X-Requested-With',
-      'MCP-Protocol-Version',
-      'Mcp-Session-Id',
-      'Last-Event-ID',
-    ],
-  });
+  const corsMethods = ['GET', 'HEAD', 'POST', 'PATCH', 'DELETE', 'OPTIONS'];
+  const corsAllowedHeaders = [
+    'Content-Type',
+    'Authorization',
+    'Idempotency-Key',
+    'Accept',
+    'Origin',
+    'X-Requested-With',
+    'MCP-Protocol-Version',
+    'Mcp-Session-Id',
+    'Last-Event-ID',
+  ];
+  const corsDelegate = (
+    req: { url?: string },
+    callback: CorsOptionsCallback,
+  ) => {
+    const path = (req.url ?? '').split('?')[0];
+    // Public, credential-free endpoints are called directly from web clients
+    // (ChatGPT's connector setup, OAuth metadata discovery), so they must not
+    // be pinned to the app's own origins.
+    const isPublic = path === '/mcp' || path.startsWith('/.well-known/');
+    if (isPublic) {
+      return callback(null, {
+        origin: '*',
+        credentials: false,
+        methods: corsMethods,
+        allowedHeaders: corsAllowedHeaders,
+      });
+    }
+    return callback(null, {
+      origin: corsOrigins,
+      credentials: true,
+      methods: corsMethods,
+      allowedHeaders: corsAllowedHeaders,
+    });
+  };
+  app.enableCors(corsDelegate);
   const swaggerConfig = new DocumentBuilder()
     .setTitle('Dlander API')
     .setDescription('Local development and integration API')

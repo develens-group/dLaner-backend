@@ -23,6 +23,27 @@ const escapeHtml = (value: string) =>
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
 
+/**
+ * The MCP SDK rejects POSTs whose `Accept` header does not list both
+ * `application/json` and `text/event-stream` with a 406. Several real clients
+ * (ChatGPT's connector validator among them) send only `application/json`, or
+ * no `Accept` at all, so the handshake never starts and the client reports a
+ * generic "settings were rejected" error.
+ *
+ * We always answer with JSON (`enableJsonResponse`), so widening the header
+ * here is safe: the SDK uses it only for this validation, not to pick a
+ * response format.
+ */
+export const ensureMcpAcceptHeader = (req: Request) => {
+  const accept = req.headers.accept ?? '';
+  if (
+    !accept.includes('application/json') ||
+    !accept.includes('text/event-stream')
+  ) {
+    req.headers.accept = 'application/json, text/event-stream';
+  }
+};
+
 @Public()
 @Controller()
 export class McpController {
@@ -98,9 +119,14 @@ ${link ? `<a href="${escapeHtml(link)}">Setup guide</a>` : ''}</div>
     res.setHeader('Cache-Control', 'no-store');
     if (req.method !== 'POST') {
       res.setHeader('Allow', 'POST');
+      const accept = req.headers.accept ?? '';
+      // Only a real browser navigation asks for HTML and nothing machine
+      // readable. Clients that also accept JSON keep getting the JSON-RPC
+      // error, so a validator can never be handed a web page.
       if (
         req.method === 'GET' &&
-        (req.headers.accept ?? '').includes('text/html')
+        accept.includes('text/html') &&
+        !accept.includes('application/json')
       ) {
         res.setHeader('X-Robots-Tag', 'noindex');
         return res.status(200).type('html').send(this.browserLandingPage(req));
@@ -114,14 +140,10 @@ ${link ? `<a href="${escapeHtml(link)}">Setup guide</a>` : ''}</div>
         },
       });
     }
-    const allowed = (
-      this.config.get<string>('CORS_ORIGINS') ??
-      this.config.getOrThrow<string>('FRONTEND_URL')
-    )
-      .split(',')
-      .map((v) => v.trim());
-    if (req.headers.origin && !allowed.includes(req.headers.origin))
-      return res.status(403).json({ error: 'Origin not allowed' });
+    ensureMcpAcceptHeader(req);
+    // The endpoint is public and stateless (no cookies, no credentials), so it
+    // is intentionally callable from any web origin. Restricting origins here
+    // blocked browser-based clients such as ChatGPT's connector setup.
     const server = new McpServer(
       { name: 'dlander', version: '1.0.0' },
       {
