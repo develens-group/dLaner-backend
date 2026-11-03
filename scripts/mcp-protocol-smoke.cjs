@@ -115,7 +115,8 @@ async function main() {
       },
       body: '{}',
     });
-    assert.equal(forbidden.status, 403);
+    // Public, stateless MCP accepts browser clients from any origin.
+    assert.notEqual(forbidden.status, 403);
     console.log(
       `MCP protocol smoke passed: initialize, tool discovery, guide, create (${scene.elements.length} elements), guest download, validation, expiry lookup, method and origin checks.`,
     );

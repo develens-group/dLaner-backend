@@ -43,12 +43,7 @@ export const elementSchema = z
     borderRadius: z
       .union([
         z.number().nonnegative().max(100000),
-        z.tuple([
-          z.number().nonnegative(),
-          z.number().nonnegative(),
-          z.number().nonnegative(),
-          z.number().nonnegative(),
-        ]),
+        z.array(z.number().nonnegative()).length(4),
       ])
       .optional(),
     hasShadow: z.boolean().optional(),
@@ -80,11 +75,7 @@ export const elementSchema = z
     heading: z.enum(['h1', 'h2', 'h3', 'h4', 'h5', 'h6']).optional(),
     elbowed: z.boolean().optional(),
     name: z.string().max(500).optional(),
-    points: z
-      .array(z.tuple([coordinate, coordinate]))
-      .min(2)
-      .max(1000)
-      .optional(),
+    points: z.array(z.array(coordinate).length(2)).min(2).max(1000).optional(),
     dlanderType: z
       .enum([
         'cube',
