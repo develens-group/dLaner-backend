@@ -36,7 +36,7 @@ const controller = () =>
     { assertEnabled: jest.fn() } as unknown as McpService,
     {
       get: (key: string) =>
-        key === 'MCP_EDITOR_URL' ? 'https://app.dlander.test/' : undefined,
+        key === 'MCP_EDITOR_URL' ? 'https://dlander.com/land' : undefined,
     } as never,
   );
 
@@ -54,7 +54,8 @@ describe('GET /mcp in a browser', () => {
     const html = res.send.mock.calls[0][0];
     expect(html).toContain('Streamable HTTP');
     expect(html).toContain('https://api.dlander.test/mcp');
-    expect(html).toContain('https://app.dlander.test/connect/ai');
+    expect(html).toContain('https://dlander.com/connect/ai');
+    expect(html).not.toContain('/land/connect/ai');
   });
 
   it('never serves the page to clients that also accept JSON', async () => {

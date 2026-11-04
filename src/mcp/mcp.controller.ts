@@ -70,7 +70,7 @@ export class McpController {
     const endpoint = host
       ? `${proto}://${host}${req.originalUrl}`
       : req.originalUrl;
-    const link = editor ? `${editor}/connect/ai` : '';
+    const link = editor ? new URL('/connect/ai', editor).toString() : '';
     return `<!doctype html>
 <html lang="en">
 <head>

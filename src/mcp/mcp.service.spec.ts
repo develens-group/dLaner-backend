@@ -29,7 +29,7 @@ describe('guest MCP designs', () => {
       } as unknown as PrismaService,
       new ConfigService({
         MCP_ENABLED: 'true',
-        MCP_EDITOR_URL: 'https://example.com/land',
+        MCP_EDITOR_URL: 'https://dlander.com/land',
       }),
     );
   });
@@ -38,6 +38,7 @@ describe('guest MCP designs', () => {
     const url = new URL(result.openUrl);
     const token = url.hash.slice(5);
     expect(token).toMatch(/^[a-f0-9]{64}$/);
+    expect(url.origin).toBe('https://dlander.com');
     expect(url.pathname).toBe('/land');
     expect(create.mock.calls[0][0].data.tokenHash).toBe(
       createHash('sha256').update(token).digest('hex'),
