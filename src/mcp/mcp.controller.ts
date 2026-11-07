@@ -14,7 +14,10 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { Public } from '../common/decorators';
 import { McpService } from './mcp.service';
-import { sceneShape } from './scene-schema';
+import { sceneShape, sceneSchema } from './scene-schema';
+import { ZodError } from 'zod';
+import { renderDesignPreview } from './design-preview';
+import { PREVIEW_RESOURCE, previewWidgetHtml } from './preview-widget';
 
 const escapeHtml = (value: string) =>
   value
@@ -148,9 +151,25 @@ ${link ? `<a href="${escapeHtml(link)}">Setup guide</a>` : ''}</div>
       { name: 'dlander', version: '1.0.0' },
       {
         instructions:
-          'Create editable dLander designs. Read get_design_guide before designing; then call create_design and give the user the returned openUrl. No API key or dLander login is needed. Links expire in 24 hours. create_design carries vector shapes and text only — for images, follow the guide’s IMAGE section and print the JSON for the /connect/ai paste box instead.',
+          'Create editable dLander designs. Read get_design_guide before designing; then call create_design, display its returned image preview in chat and retain the openUrl for later editing. Render a new preview after each revision. No API key or dLander login is needed. Links expire in 24 hours. create_design carries vector shapes and text only — for images, follow the guide’s IMAGE section and print the JSON for the /connect/ai paste box instead.',
       },
     );
+    server.registerResource('design-preview', PREVIEW_RESOURCE, {}, () => ({
+      contents: [
+        {
+          uri: PREVIEW_RESOURCE,
+          mimeType: 'text/html;profile=mcp-app',
+          text: previewWidgetHtml,
+          _meta: {
+            ui: {
+              prefersBorder: true,
+              csp: { connectDomains: [], resourceDomains: ['data:'] },
+            },
+            'openai/widgetPrefersBorder': true,
+          },
+        },
+      ],
+    }));
     server.registerTool(
       'get_design_guide',
       {
@@ -173,6 +192,13 @@ ${link ? `<a href="${escapeHtml(link)}">Setup guide</a>` : ''}</div>
         description:
           'Validate and save a complete editable vector scene for 24 hours. Returns an openUrl for the dLander canvas. Send the complete revised scene for changes. Vector shapes and text only: no images, no external fetches (images use the paste hand-off in get_design_guide).',
         inputSchema: sceneShape,
+        _meta: {
+          securitySchemes: [{ type: 'noauth' }],
+          ui: { resourceUri: PREVIEW_RESOURCE },
+          'openai/outputTemplate': PREVIEW_RESOURCE,
+          'openai/toolInvocation/invoking': 'Rendering your design',
+          'openai/toolInvocation/invoked': 'Design preview ready',
+        },
         annotations: {
           readOnlyHint: false,
           destructiveHint: false,
@@ -182,13 +208,27 @@ ${link ? `<a href="${escapeHtml(link)}">Setup guide</a>` : ''}</div>
       },
       async (args) => {
         try {
-          const result = await this.service.create(args);
+          // Validate before rendering; render before saving so a renderer failure
+          // cannot create an inaccessible draft or consume arbitrary input.
+          const scene = sceneSchema.parse(args);
+          if (Buffer.byteLength(JSON.stringify(scene), 'utf8') > 1_000_000) {
+            throw new BadRequestException('Design exceeds 1 MB');
+          }
+          const preview = renderDesignPreview(scene).toString('base64');
+          const result = await this.service.create(scene);
           return {
-            content: [{ type: 'text', text: JSON.stringify(result) }],
+            content: [
+              { type: 'text' as const, text: JSON.stringify(result) },
+              { type: 'image' as const, mimeType: 'image/png', data: preview },
+            ],
+            _meta: { previewPng: preview },
             structuredContent: result,
           };
         } catch (error) {
-          if (error instanceof BadRequestException) {
+          if (
+            error instanceof BadRequestException ||
+            error instanceof ZodError
+          ) {
             return {
               isError: true,
               content: [{ type: 'text', text: error.message }],

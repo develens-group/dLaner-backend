@@ -87,6 +87,23 @@ async function main() {
       arguments: args,
     });
     assert.ok(!created.isError, JSON.stringify(created));
+    const image = created.content.find((part) => part.type === 'image');
+    assert.equal(image?.mimeType, 'image/png');
+    assert.equal(
+      Buffer.from(image.data, 'base64').subarray(0, 8).toString('hex'),
+      '89504e470d0a1a0a',
+    );
+    const resources = await client.listResources();
+    assert.ok(
+      resources.resources.some(
+        (r) => r.uri === 'ui://dlander/design-preview-v1.html',
+      ),
+    );
+    const widget = await client.readResource({
+      uri: 'ui://dlander/design-preview-v1.html',
+    });
+    assert.ok(widget.contents[0].text.includes('ui/notifications/tool-result'));
+    assert.equal(created._meta.previewPng, image.data);
     const result = created.structuredContent;
     const token = new URL(result.openUrl).hash.slice(5);
     const downloaded = await fetch(`${base}/api/v1/mcp/designs/${token}`);
