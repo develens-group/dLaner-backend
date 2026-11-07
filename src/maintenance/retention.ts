@@ -1,3 +1,4 @@
+import { SocialAuthService } from '../auth/social-auth.service';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from '../app.module';
 import { McpService } from '../mcp/mcp.service';
@@ -9,6 +10,7 @@ import { CreditService } from '../credits/credit.service';
 async function cleanup() {
   const app = await NestFactory.createApplicationContext(AppModule);
   try {
+    const social = await app.get(SocialAuthService).cleanup();
     const mcp = await app.get(McpService).cleanup();
     const api = await app.get(RequestPersistenceService).cleanup();
     const ai = await app.get(AiService).cleanup();
@@ -16,6 +18,8 @@ async function cleanup() {
     app
       .get(AuditService)
       .record('retention.cleanup', undefined, undefined, 'Retention', {
+        socialAttemptsDeleted: social.attempts,
+        socialGrantsDeleted: social.grants,
         mcpDesignsDeleted: mcp.count,
         apiRequestsDeleted: api.count,
         aiRequestsDeleted: ai.count,

@@ -180,6 +180,7 @@ model User {
   createdAt                   DateTime                     @default(now())
   updatedAt                   DateTime                     @updatedAt
   deletedAt                   DateTime?
+  socialIdentities            SocialIdentity[]
   sessions                    Session[]
   wordpressSites              WordPressSite[]
   wordpressConnectionRequests WordPressConnectionRequest[]
@@ -937,6 +938,53 @@ model McpDesign {
   sizeBytes Int
   createdAt DateTime @default(now())
   expiresAt DateTime
+
+  @@index([expiresAt])
+}
+
+// Provider tokens are never persisted. Stable provider subjects, not emails, identify accounts.
+model SocialIdentity {
+  id                String   @id @default(uuid()) @db.Uuid
+  userId            String   @db.Uuid
+  provider          String   @db.VarChar(16)
+  providerAccountId String   @db.VarChar(255)
+  createdAt         DateTime @default(now())
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@unique([userId, provider])
+}
+
+model SocialAuthAttempt {
+  id               String    @id @default(uuid()) @db.Uuid
+  provider         String    @db.VarChar(16)
+  stateHash        String    @unique @db.VarChar(64)
+  clientState      String    @db.VarChar(128)
+  codeChallenge    String    @db.VarChar(43)
+  providerVerifier String    @db.VarChar(128)
+  linkUserId       String?   @db.Uuid
+  linkSessionId    String?   @db.Uuid
+  expiresAt        DateTime
+  usedAt           DateTime?
+  createdAt        DateTime  @default(now())
+
+  @@index([expiresAt])
+}
+
+model SocialAuthGrant {
+  id                String    @id @default(uuid()) @db.Uuid
+  codeHash          String    @unique @db.VarChar(64)
+  codeChallenge     String    @db.VarChar(43)
+  provider          String    @db.VarChar(16)
+  providerAccountId String    @db.VarChar(255)
+  email             String?   @db.VarChar(320)
+  emailTrusted      Boolean
+  displayName       String?   @db.VarChar(100)
+  linkUserId        String?   @db.Uuid
+  linkSessionId     String?   @db.Uuid
+  expiresAt         DateTime
+  usedAt            DateTime?
+  createdAt         DateTime  @default(now())
 
   @@index([expiresAt])
 }

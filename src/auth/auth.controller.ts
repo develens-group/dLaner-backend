@@ -14,7 +14,7 @@ import { Throttle } from '@nestjs/throttler';
 import type { Request, Response } from 'express';
 import { response } from '../common/api-response';
 import { CurrentSession, CurrentUser, Public } from '../common/decorators';
-import { durationMs } from '../common/duration';
+import { transportAuthTokens } from './auth-token-transport';
 import { getClientContext } from '../common/request-context';
 import type { AccessPrincipal } from '../common/auth.types';
 import {
@@ -159,21 +159,7 @@ export class AuthController {
   private transportTokens<
     T extends { accessToken: string; refreshToken?: string },
   >(result: T, res: Response) {
-    // A grace-window refresh returns an access token only (the caller already
-    // holds the rotated refresh token), so there is nothing to set here.
-    if (!this.isCookie() || !result.refreshToken) return result;
-    res.cookie(this.cookieName(), result.refreshToken, {
-      httpOnly: true,
-      secure: true,
-      sameSite: 'strict',
-      path: '/api/v1/auth',
-      maxAge: durationMs(
-        this.config.getOrThrow<string>('JWT_REFRESH_EXPIRES_IN'),
-      ),
-    });
-    const { refreshToken, ...safe } = result;
-    void refreshToken;
-    return safe;
+    return transportAuthTokens(result, res, this.config);
   }
   private clearCookie(res: Response) {
     if (this.isCookie())

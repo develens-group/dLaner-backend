@@ -1,6 +1,17 @@
 import { createHash } from 'node:crypto';
 
 const SENSITIVE = new Set([
+  'code',
+  'state',
+  'clientstate',
+  'codeverifier',
+  'code_verifier',
+  'codechallenge',
+  'code_challenge',
+  'access_token',
+  'refresh_token',
+  'id_token',
+  'appsecret_proof',
   'password',
   'currentpassword',
   'newpassword',
@@ -13,6 +24,9 @@ const SENSITIVE = new Set([
   'apikey',
   'secret',
   'clientsecret',
+  'client_secret',
+  'idtoken',
+  'providertoken',
   'paymenttoken',
   'cardnumber',
   'cvv',

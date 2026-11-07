@@ -9,6 +9,15 @@ import {
 } from 'class-validator';
 
 class Environment {
+  @IsString() OAUTH_CALLBACK_BASE_URL = '';
+  @IsString() GOOGLE_CLIENT_ID = '';
+  @IsString() GOOGLE_CLIENT_SECRET = '';
+  @IsString() GITHUB_CLIENT_ID = '';
+  @IsString() GITHUB_CLIENT_SECRET = '';
+  @IsString() FACEBOOK_CLIENT_ID = '';
+  @IsString() FACEBOOK_CLIENT_SECRET = '';
+  @IsString() FACEBOOK_GRAPH_API_VERSION = '';
+
   @IsIn(['true', 'false']) MCP_ENABLED = 'false';
   @IsUrl({ require_tld: false }) MCP_EDITOR_URL = 'http://localhost:5173/land';
   @IsString() DATABASE_URL!: string;
@@ -75,6 +84,7 @@ class Environment {
 }
 
 export function validateEnvironment(values: Record<string, unknown>) {
+  validateSocialEnvironment(values);
   const numericKeys = [
     'PORT',
     'API_REQUEST_RETENTION_DAYS',
@@ -182,4 +192,72 @@ function requireWhen(
   );
   if (missing.length)
     throw new Error(`${missing.join(', ')} required when ${reason}`);
+}
+
+export function validateSocialEnvironment(values: Record<string, unknown>) {
+  const string = (key: string) =>
+    typeof values[key] === 'string' ? values[key].trim() : '';
+  let enabled = false;
+  for (const provider of ['GOOGLE', 'GITHUB', 'FACEBOOK']) {
+    if (
+      string(`${provider}_CLIENT_ID`) ||
+      string(`${provider}_CLIENT_SECRET`)
+    ) {
+      enabled = true;
+      requireWhen(
+        values,
+        true,
+        [
+          `${provider}_CLIENT_ID`,
+          `${provider}_CLIENT_SECRET`,
+          'OAUTH_CALLBACK_BASE_URL',
+          'FRONTEND_URL',
+        ],
+        `${provider} social login is configured`,
+      );
+      if (provider === 'FACEBOOK') {
+        requireWhen(
+          values,
+          true,
+          ['FACEBOOK_GRAPH_API_VERSION'],
+          'Facebook login is configured',
+        );
+      }
+    }
+  }
+  if (
+    string('FACEBOOK_GRAPH_API_VERSION') &&
+    !/^v\d+\.\d+$/.test(string('FACEBOOK_GRAPH_API_VERSION'))
+  ) {
+    throw new Error(
+      'FACEBOOK_GRAPH_API_VERSION must be an explicit Graph API version such as v23.0',
+    );
+  }
+  const validateOrigin = (name: string) => {
+    let url: URL;
+    try {
+      url = new URL(string(name));
+    } catch {
+      throw new Error(`${name} must be a valid origin`);
+    }
+    const local = ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname);
+    if (
+      url.username ||
+      url.password ||
+      url.search ||
+      url.hash ||
+      url.pathname !== '/' ||
+      (url.protocol !== 'https:' && !(local && url.protocol === 'http:'))
+    ) {
+      throw new Error(
+        `${name} must be an HTTPS origin without a path, query, or credentials (HTTP localhost is allowed)`,
+      );
+    }
+  };
+  if (string('OAUTH_CALLBACK_BASE_URL')) {
+    validateOrigin('OAUTH_CALLBACK_BASE_URL');
+  }
+  if (enabled) {
+    validateOrigin('FRONTEND_URL');
+  }
 }

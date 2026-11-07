@@ -106,7 +106,6 @@ export class AuthService {
   }
 
   async verifyEmail(token: string) {
-    this.assertVerificationEnabled();
     const code = token.trim().replace(/\s+/g, '');
     const tokenHash = hashOpaqueToken(code);
     await this.prisma.$transaction(async (tx) => {
@@ -115,6 +114,15 @@ export class AuthService {
       });
       if (!record || record.usedAt || record.expiresAt <= new Date())
         throw new BadRequestException('Invalid or expired verification token');
+      const user = await tx.user.findUnique({ where: { id: record.userId } });
+      if (
+        !user ||
+        user.deletedAt ||
+        (user.status !== UserStatus.PENDING_VERIFICATION &&
+          user.status !== UserStatus.ACTIVE)
+      ) {
+        throw new ForbiddenException('Account is unavailable');
+      }
       const changed = await tx.emailVerificationToken.updateMany({
         where: { id: record.id, usedAt: null },
         data: { usedAt: new Date() },
@@ -132,35 +140,48 @@ export class AuthService {
   }
 
   async resendVerification(emailInput: string) {
-    this.assertVerificationEnabled();
-    const email = normalizeEmail(emailInput);
-    const user = await this.prisma.user.findUnique({ where: { email } });
-    if (user?.status === UserStatus.PENDING_VERIFICATION) {
-      const token = createEmailOtpCode();
-      await this.prisma.$transaction([
-        this.prisma.emailVerificationToken.updateMany({
-          where: { userId: user.id, usedAt: null },
-          data: { usedAt: new Date() },
-        }),
-        this.prisma.emailVerificationToken.create({
-          data: {
-            userId: user.id,
-            tokenHash: hashOpaqueToken(token),
-            expiresAt: this.expiry('EMAIL_VERIFICATION_EXPIRES_IN'),
-          },
-        }),
-      ]);
-      await this.mail.sendVerification(user.email, token);
+    const user = await this.prisma.user.findUnique({
+      where: { email: normalizeEmail(emailInput) },
+    });
+    if (
+      user &&
+      !user.deletedAt &&
+      !user.emailVerifiedAt &&
+      (user.status === UserStatus.PENDING_VERIFICATION ||
+        user.status === UserStatus.ACTIVE)
+    ) {
+      const socialPending = await this.prisma.socialIdentity.count({
+        where: { userId: user.id },
+      });
+      const issued = await this.prisma.emailVerificationToken.findFirst({
+        where: { userId: user.id },
+        select: { id: true },
+      });
+      if (this.verificationRequired() || socialPending > 0 || issued) {
+        await this.sendVerificationCode(user);
+      }
     }
     return {
-      message:
-        'If the account is eligible, a verification code has been sent.',
+      message: 'If the account is eligible, a verification code has been sent.',
     };
   }
 
   async login(dto: LoginDto, context: ClientContext) {
-    const user = await this.authenticateUser(dto, context);
-    return this.prisma.$transaction(async (tx) => {
+    return this.createSessionForUser(
+      await this.authenticateUser(dto, context),
+      context,
+    );
+  }
+
+  async createSessionForUser(
+    user: User,
+    context: ClientContext,
+    transaction?: Prisma.TransactionClient,
+  ) {
+    if (user.status !== UserStatus.ACTIVE || user.deletedAt) {
+      throw new ForbiddenException('Account is unavailable');
+    }
+    const create = async (tx: Prisma.TransactionClient) => {
       const session = await tx.session.create({
         data: {
           userId: user.id,
@@ -174,12 +195,46 @@ export class AuthService {
         where: { id: session.id },
         data: { refreshTokenHash: await argon2.hash(tokens.refreshToken) },
       });
-      await tx.user.update({
+      const updated = await tx.user.update({
         where: { id: user.id },
         data: { lastLoginAt: new Date() },
       });
-      return { ...tokens, user: publicUser(user) };
-    });
+      return { ...tokens, user: publicUser(updated) };
+    };
+    return transaction ? create(transaction) : this.prisma.$transaction(create);
+  }
+
+  /** Social flows require mailbox proof even when password signup verification is disabled. */
+  async sendSocialVerification(userId: string) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (
+      !user ||
+      user.deletedAt ||
+      user.emailVerifiedAt ||
+      (user.status !== UserStatus.PENDING_VERIFICATION &&
+        user.status !== UserStatus.ACTIVE)
+    ) {
+      throw new ForbiddenException('Account is unavailable');
+    }
+    await this.sendVerificationCode(user);
+  }
+
+  private async sendVerificationCode(user: User) {
+    const token = createEmailOtpCode();
+    await this.prisma.$transaction([
+      this.prisma.emailVerificationToken.updateMany({
+        where: { userId: user.id, usedAt: null },
+        data: { usedAt: new Date() },
+      }),
+      this.prisma.emailVerificationToken.create({
+        data: {
+          userId: user.id,
+          tokenHash: hashOpaqueToken(token),
+          expiresAt: this.expiry('EMAIL_VERIFICATION_EXPIRES_IN'),
+        },
+      }),
+    ]);
+    await this.mail.sendVerification(user.email, token);
   }
 
   async createCaptcha(email: string, context: ClientContext) {
@@ -250,7 +305,12 @@ export class AuthService {
       });
     }
     if (user.status === UserStatus.PENDING_VERIFICATION) {
-      if (this.verificationRequired())
+      if (
+        this.verificationRequired() ||
+        (await this.prisma.socialIdentity.count({
+          where: { userId: user.id },
+        })) > 0
+      )
         throw new ForbiddenException('Email verification is required');
       user = await this.prisma.user.update({
         where: { id: user.id },
@@ -532,10 +592,6 @@ export class AuthService {
   private verificationRequired() {
     return this.config.get('EMAIL_VERIFICATION_REQUIRED', 'false') === 'true';
   }
-  private assertVerificationEnabled() {
-    if (!this.verificationRequired())
-      throw new ForbiddenException('Email verification is currently disabled');
-  }
   private async issueTokens(
     user: User,
     sessionId: string,
@@ -579,7 +635,10 @@ export class AuthService {
     return clientType === SessionClientType.WORDPRESS ? 'wordpress' : 'web';
   }
   private async withinRotationGrace(
-    session: Pick<SessionWithUser, 'prevRefreshTokenHash' | 'prevRefreshTokenAt'>,
+    session: Pick<
+      SessionWithUser,
+      'prevRefreshTokenHash' | 'prevRefreshTokenAt'
+    >,
     rawToken: string,
   ) {
     if (!session.prevRefreshTokenHash || !session.prevRefreshTokenAt)
