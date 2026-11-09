@@ -41,7 +41,7 @@ export class StubImageProvider implements ImageProviderAdapter {
   }
 }
 
-/** Our multipart field → Replicate input field for known models (when configJson.input is absent). */
+/** Our multipart field â†’ Replicate input field for known models (when configJson.input is absent). */
 const REPLICATE_MODEL_INPUT_DEFAULTS: Record<
   string,
   { image?: string; prompt?: string; imageArray?: boolean }
@@ -110,11 +110,15 @@ export class ReplicateImageProvider implements ImageProviderAdapter {
         : {}),
     };
 
-    // configJson.input maps OUR field → Replicate field, e.g. { "image": "img_cond_path" }
+    // configJson.input maps OUR field â†’ Replicate field, e.g. { "image": "img_cond_path" }
     const imageKey = inputMap.image ?? modelDefaults.image ?? 'image';
     const promptKey = inputMap.prompt ?? modelDefaults.prompt ?? 'prompt';
     if (imageDataUrl)
-      predictionInput[imageKey] = modelDefaults.imageArray
+      predictionInput[imageKey] = (
+        typeof config.imageArray === 'boolean'
+          ? config.imageArray
+          : modelDefaults.imageArray
+      )
         ? [imageDataUrl]
         : imageDataUrl;
     if (input.prompt) predictionInput[promptKey] = input.prompt;
@@ -122,7 +126,10 @@ export class ReplicateImageProvider implements ImageProviderAdapter {
     const versionFromConfig =
       typeof config.version === 'string' ? config.version : undefined;
 
-    const official = Boolean(modelDefaults.imageArray) && !versionFromConfig;
+    const official =
+      (typeof config.modelEndpoint === 'boolean'
+        ? config.modelEndpoint
+        : Boolean(modelDefaults.imageArray)) && !versionFromConfig;
     const versionId = official
       ? undefined
       : await this.resolveVersionId(

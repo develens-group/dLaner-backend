@@ -87,8 +87,16 @@ export class GoogleImageProvider implements ImageProviderAdapter {
       });
     }
 
-    const model = normalizeGoogleImageModel(variant.externalModel);
+    const modelConfig = variant.configJson as Record<string, unknown> | null;
+    const model =
+      modelConfig?.managedImageModel === true
+        ? variant.externalModel.replace(/^models\//, '').trim()
+        : normalizeGoogleImageModel(variant.externalModel);
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;
+    const generationConfig =
+      modelConfig?.defaults && typeof modelConfig.defaults === 'object'
+        ? (modelConfig.defaults as Record<string, unknown>)
+        : {};
 
     const res = await fetch(url, {
       method: 'POST',
@@ -99,6 +107,7 @@ export class GoogleImageProvider implements ImageProviderAdapter {
       body: JSON.stringify({
         contents: [{ role: 'user', parts }],
         generationConfig: {
+          ...generationConfig,
           responseModalities: ['TEXT', 'IMAGE'],
         },
       }),

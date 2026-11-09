@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+import { ImageModelSetupDto } from './image-model-setup.dto';
 import {
   BadRequestException,
   ConflictException,
@@ -31,6 +33,114 @@ const BUILTIN_PROVIDERS = [
 @Injectable()
 export class AiOperationsCatalogService {
   constructor(private readonly prisma: PrismaService) {}
+
+  async importImageModel(dto: ImageModelSetupDto) {
+    const model = dto.model.trim();
+    if (
+      !model ||
+      !dto.label.trim() ||
+      !/^(?:generate|edit)-[a-z0-9]+(?:-[a-z0-9]+)*$/.test(dto.slug)
+    ) {
+      throw new BadRequestException(
+        'A model ID, label and generate-/edit- slug are required',
+      );
+    }
+    if (!['replicate', 'openai', 'google', 'xai'].includes(dto.provider)) {
+      throw new BadRequestException('Unsupported image provider');
+    }
+    if (
+      dto.provider === 'replicate' &&
+      !/^[a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+$/.test(model)
+    ) {
+      throw new BadRequestException('Replicate model must be owner/model-name');
+    }
+    const values = new Set<string>();
+    const entries = dto.tiers.map((tier) => {
+      const value = tier.value.trim();
+      if (!value || values.has(value))
+        throw new BadRequestException(
+          'Option values must be non-empty and unique',
+        );
+      values.add(value);
+      let cost: Prisma.Decimal;
+      try {
+        cost = parseCreditAmount(tier.creditCost);
+        if (!cost.isFinite() || cost.lte(0) || cost.gte('1000000000000000000'))
+          throw new Error('Invalid price');
+      } catch {
+        throw new BadRequestException(
+          `Set a positive decimal credit price for ${value}`,
+        );
+      }
+      const hash = createHash('sha256')
+        .update(`image-model:${dto.slug}:${dto.provider}:${model}:${value}`)
+        .digest('hex');
+      const id = `${hash.slice(0, 8)}-${hash.slice(8, 12)}-5${hash.slice(13, 16)}-8${hash.slice(17, 20)}-${hash.slice(20, 32)}`;
+      const defaults = {
+        ...dto.defaults,
+        ...tier.parameters,
+        ...(dto.selectorName ? { [dto.selectorName]: value } : {}),
+      };
+      return { value, cost, id, defaults };
+    });
+    if (!entries.length)
+      throw new BadRequestException('Price at least one option');
+    return this.prisma.$transaction(async (tx) => {
+      const type = await tx.aiOperationType.upsert({
+        where: { slug: dto.slug },
+        create: {
+          slug: dto.slug,
+          label: dto.label.trim(),
+          description: dto.description.trim(),
+          isActive: true,
+          sortOrder: 30,
+        },
+        update: {
+          label: dto.label.trim(),
+          description: dto.description.trim(),
+          isActive: true,
+        },
+      });
+      await tx.aiProviderVariant.updateMany({
+        where: { typeId: type.id, isDefault: true },
+        data: { isDefault: false },
+      });
+      for (const [index, entry] of entries.entries()) {
+        const data = {
+          typeId: type.id,
+          provider: dto.provider,
+          externalModel: model,
+          label: entry.value,
+          creditCost: entry.cost,
+          priority: index,
+          isDefault: index === 0,
+          isActive: true,
+          configJson: {
+            managedImageModel: true,
+            requiresPrompt: dto.requiresPrompt,
+            defaults: entry.defaults,
+            input: { image: dto.imageField, prompt: dto.promptField },
+            imageArray: dto.imageArray,
+            modelEndpoint: dto.modelEndpoint,
+            selection: {
+              name: dto.selectorName || 'option',
+              value: entry.value,
+            },
+          } as Prisma.InputJsonObject,
+        };
+        await tx.aiProviderVariant.upsert({
+          where: { id: entry.id },
+          create: { id: entry.id, ...data },
+          update: data,
+        });
+      }
+      const saved = await tx.aiOperationType.findUniqueOrThrow({
+        where: { id: type.id },
+        include: { variants: true },
+      });
+      return this.serializeType(saved);
+    });
+  }
 
   listModelPresets() {
     return REPLICATE_PRESETS;

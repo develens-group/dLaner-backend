@@ -131,7 +131,7 @@ export class AiOperationsExecuteService {
     const preset = REPLICATE_PRESETS.find(
       (item) => item.model === variant.externalModel,
     );
-    if (preset) {
+    if (preset && config.managedImageModel !== true) {
       const defaults = config.defaults as Record<string, unknown> | undefined;
       const selection = config.selection as Record<string, unknown> | undefined;
       if (
@@ -147,6 +147,9 @@ export class AiOperationsExecuteService {
           'This model needs a valid priced quality/resolution configuration. Import its preset in AI Catalog.',
         );
       }
+    }
+    if (config.requiresPrompt === true && !input.prompt?.trim()) {
+      throw new BadRequestException('A prompt is required for this model');
     }
     const mode =
       config.mode === 'edits' || config.mode === 'generations'

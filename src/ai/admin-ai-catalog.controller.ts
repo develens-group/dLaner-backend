@@ -1,3 +1,4 @@
+import { ImageModelSetupDto } from './image-model-setup.dto';
 import { IsString, IsObject } from 'class-validator';
 import {
   Body,
@@ -39,6 +40,20 @@ export class AdminAiCatalogController {
     private readonly catalog: AiOperationsCatalogService,
     private readonly audit: AuditService,
   ) {}
+
+  @Post('image-models/import') async importImageModel(
+    @CurrentUser() actor: AccessPrincipal,
+    @Body() dto: ImageModelSetupDto,
+  ) {
+    const item = await this.catalog.importImageModel(dto);
+    this.audit.record(
+      'ai_image_model.imported',
+      actor.userId,
+      item.id,
+      'AiOperationType',
+    );
+    return response(item);
+  }
 
   @Get('model-presets') modelPresets() {
     return response(this.catalog.listModelPresets());

@@ -85,7 +85,8 @@ export function inputSelection(config: unknown) {
     return undefined;
   }
   const { name, value } = selection as Record<string, unknown>;
-  return (name === 'quality' || name === 'resolution') &&
+  return typeof name === 'string' &&
+    /^[A-Za-z][A-Za-z0-9_]{0,63}$/.test(name) &&
     typeof value === 'string'
     ? { name, value }
     : undefined;
