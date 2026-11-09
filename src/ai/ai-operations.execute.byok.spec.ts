@@ -65,6 +65,58 @@ describe('AiOperationsExecuteService BYOK', () => {
     );
   });
 
+  it('reserves the exact server tariff for the selected quality', async () => {
+    catalog.resolveVariant.mockResolvedValue({
+      id: 'medium-tier',
+      provider: 'replicate',
+      externalModel: 'openai/gpt-image-2.5-flare',
+      creditCost: '0.004',
+      configJson: {
+        defaults: {
+          quality: 'medium',
+          aspect_ratio: '1:1',
+          number_of_images: 1,
+        },
+        selection: { name: 'quality', value: 'medium' },
+      },
+    });
+    const result = await service.execute(
+      userId,
+      'generate-gpt-image-2-5-flare',
+      'medium-tier',
+      { prompt: 'A blue house' },
+    );
+    expect(credits.reserveCredits).toHaveBeenCalledWith(
+      userId,
+      '0.004',
+      expect.any(String),
+      'AI_OPERATION',
+      expect.any(String),
+    );
+    expect(credits.captureReservation).toHaveBeenCalled();
+    expect(result.creditCost).toBe('0.004');
+  });
+
+  it('rejects a mismatched priced option before reserving credits', async () => {
+    catalog.resolveVariant.mockResolvedValue({
+      id: 'bad-tier',
+      provider: 'replicate',
+      externalModel: 'openai/gpt-image-2.5-flare',
+      creditCost: '0.004',
+      configJson: {
+        defaults: { quality: 'max', aspect_ratio: '1:1', number_of_images: 1 },
+        selection: { name: 'quality', value: 'medium' },
+      },
+    });
+    await expect(
+      service.execute(userId, 'generate-gpt-image-2-5-flare', 'bad-tier', {
+        prompt: 'A blue house',
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(credits.reserveCredits).not.toHaveBeenCalled();
+    expect(adapterExecute).not.toHaveBeenCalled();
+  });
+
   it('accepts credentialId for replicate variants and skips credits', async () => {
     catalog.resolveVariant.mockResolvedValue({
       id: 'variant-rep',

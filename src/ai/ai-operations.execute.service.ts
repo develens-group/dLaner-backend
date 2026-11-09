@@ -16,6 +16,7 @@ import { AiCredentialsService } from './ai-credentials.service';
 import { isProviderAuthError, redactSecrets } from './ai-error-utils';
 import { AiGalleryStorageService } from './ai-gallery.storage';
 import { AiOperationsCatalogService } from './ai-operations.catalog';
+import { REPLICATE_PRESETS } from './replicate-presets';
 import {
   ImageExecuteInput,
   ImageProviderRegistry,
@@ -105,6 +106,16 @@ export class AiOperationsExecuteService {
     credentialId?: string,
   ) {
     const variant = await this.catalog.resolveVariant(typeSlug, variantId);
+    if (
+      REPLICATE_PRESETS.some(
+        (preset) => preset.model === variant.externalModel,
+      ) &&
+      !input.prompt?.trim()
+    ) {
+      throw new BadRequestException(
+        'A prompt is required for this image model',
+      );
+    }
 
     if (credentialId && !isByokImageProvider(variant.provider)) {
       throw new BadRequestException({
@@ -117,6 +128,26 @@ export class AiOperationsExecuteService {
       variant.configJson && typeof variant.configJson === 'object'
         ? (variant.configJson as Record<string, unknown>)
         : {};
+    const preset = REPLICATE_PRESETS.find(
+      (item) => item.model === variant.externalModel,
+    );
+    if (preset) {
+      const defaults = config.defaults as Record<string, unknown> | undefined;
+      const selection = config.selection as Record<string, unknown> | undefined;
+      if (
+        !defaults ||
+        !selection ||
+        selection.name !== preset.parameter ||
+        selection.value !== defaults[preset.parameter] ||
+        !(preset.options as readonly unknown[]).includes(selection.value) ||
+        (preset.parameter === 'quality' && defaults.number_of_images !== 1) ||
+        defaults.aspect_ratio !== '1:1'
+      ) {
+        throw new BadRequestException(
+          'This model needs a valid priced quality/resolution configuration. Import its preset in AI Catalog.',
+        );
+      }
+    }
     const mode =
       config.mode === 'edits' || config.mode === 'generations'
         ? config.mode
@@ -220,7 +251,7 @@ export class AiOperationsExecuteService {
           customByok: typeSlug === 'custom-byok',
           hasImage: Boolean(input.image),
           prompt: input.prompt ?? null,
-        } as Prisma.InputJsonValue,
+        },
       },
     });
 

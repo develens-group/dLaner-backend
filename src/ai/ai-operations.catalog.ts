@@ -14,6 +14,11 @@ import {
   UpdateProviderVariantDto,
 } from './ai-operations.dto';
 import { isByokImageProvider } from './ai-byok-image';
+import {
+  REPLICATE_PRESETS,
+  pricedPreset,
+  inputSelection,
+} from './replicate-presets';
 
 const BUILTIN_PROVIDERS = [
   { id: 'replicate', label: 'Replicate', implemented: true },
@@ -26,6 +31,62 @@ const BUILTIN_PROVIDERS = [
 @Injectable()
 export class AiOperationsCatalogService {
   constructor(private readonly prisma: PrismaService) {}
+
+  listModelPresets() {
+    return REPLICATE_PRESETS;
+  }
+
+  async importModelPreset(id: string, prices: Record<string, unknown>) {
+    const { preset, entries } = pricedPreset(id, prices);
+    await this.prisma.$transaction(async (tx) => {
+      const type = await tx.aiOperationType.upsert({
+        where: { slug: preset.slug },
+        create: {
+          slug: preset.slug,
+          label: preset.label,
+          description: preset.description,
+          isActive: true,
+          sortOrder: 30,
+        },
+        update: { isActive: true },
+      });
+      await tx.aiProviderVariant.updateMany({
+        where: { typeId: type.id, isDefault: true },
+        data: { isDefault: false },
+      });
+      for (const [index, entry] of entries.entries()) {
+        const data = {
+          typeId: type.id,
+          provider: 'replicate',
+          externalModel: preset.model,
+          label: entry.value,
+          creditCost: entry.cost,
+          priority: preset.options.indexOf(entry.value as never),
+          isDefault: index === 0,
+          isActive: true,
+          configJson: {
+            defaults: {
+              [preset.parameter]: entry.value,
+              aspect_ratio: '1:1',
+              ...(preset.parameter === 'quality'
+                ? { number_of_images: 1 }
+                : {}),
+            },
+            selection: { name: preset.parameter, value: entry.value },
+          },
+        };
+        await tx.aiProviderVariant.upsert({
+          where: { id: entry.variantId },
+          create: { id: entry.variantId, ...data },
+          update: data,
+        });
+      }
+    });
+    const type = await this.prisma.aiOperationType.findUniqueOrThrow({
+      where: { slug: preset.slug },
+    });
+    return this.getType(type.id, true);
+  }
 
   listProviders() {
     return BUILTIN_PROVIDERS;
@@ -299,7 +360,7 @@ export class AiOperationsCatalogService {
   }
 
   private serializeVariant<
-    T extends { creditCost: unknown; provider?: string },
+    T extends { creditCost: unknown; provider?: string; configJson?: unknown },
   >(variant: T) {
     const provider =
       typeof variant.provider === 'string' ? variant.provider : '';
@@ -307,6 +368,7 @@ export class AiOperationsCatalogService {
       ...variant,
       creditCost: formatCreditAmount(variant.creditCost as never),
       supportsUserKey: isByokImageProvider(provider),
+      inputSelection: inputSelection(variant.configJson),
     };
   }
 }

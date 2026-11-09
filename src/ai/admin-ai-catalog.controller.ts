@@ -1,3 +1,4 @@
+import { IsString, IsObject } from 'class-validator';
 import {
   Body,
   Controller,
@@ -24,6 +25,11 @@ import {
   UpdateProviderVariantDto,
 } from './ai-operations.dto';
 
+class ImportModelPresetDto {
+  @IsString() presetId!: string;
+  @IsObject() prices!: Record<string, unknown>;
+}
+
 @ApiTags('admin-ai-catalog')
 @ApiBearerAuth()
 @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
@@ -33,6 +39,24 @@ export class AdminAiCatalogController {
     private readonly catalog: AiOperationsCatalogService,
     private readonly audit: AuditService,
   ) {}
+
+  @Get('model-presets') modelPresets() {
+    return response(this.catalog.listModelPresets());
+  }
+
+  @Post('model-presets/import') async importPreset(
+    @CurrentUser() actor: AccessPrincipal,
+    @Body() dto: ImportModelPresetDto,
+  ) {
+    const item = await this.catalog.importModelPreset(dto.presetId, dto.prices);
+    this.audit.record(
+      'ai_model_preset.imported',
+      actor.userId,
+      item.id,
+      'AiOperationType',
+    );
+    return response(item);
+  }
 
   @Get('providers') providers() {
     return response(this.catalog.listProviders());
@@ -50,7 +74,7 @@ export class AdminAiCatalogController {
     this.audit.record(
       'ai_operation_type.created',
       actor.userId,
-      item.id as string,
+      item.id,
       'AiOperationType',
     );
     return response(item);
@@ -105,7 +129,7 @@ export class AdminAiCatalogController {
     this.audit.record(
       'ai_provider_variant.created',
       actor.userId,
-      item.id as string,
+      item.id,
       'AiProviderVariant',
     );
     return response(item);

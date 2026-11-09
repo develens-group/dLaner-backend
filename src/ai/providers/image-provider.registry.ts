@@ -44,8 +44,23 @@ export class StubImageProvider implements ImageProviderAdapter {
 /** Our multipart field → Replicate input field for known models (when configJson.input is absent). */
 const REPLICATE_MODEL_INPUT_DEFAULTS: Record<
   string,
-  { image?: string; prompt?: string }
+  { image?: string; prompt?: string; imageArray?: boolean }
 > = {
+  'google/nano-banana-2.1': {
+    image: 'image_input',
+    prompt: 'prompt',
+    imageArray: true,
+  },
+  'openai/gpt-image-2.5-flare': {
+    image: 'input_images',
+    prompt: 'prompt',
+    imageArray: true,
+  },
+  'openai/gpt-image-2.5-sunburst': {
+    image: 'input_images',
+    prompt: 'prompt',
+    imageArray: true,
+  },
   'prunaai/flux-kontext-fast': { image: 'img_cond_path', prompt: 'prompt' },
   'men1scus/birefnet': { image: 'image' },
   'nightmareai/real-esrgan': { image: 'image' },
@@ -98,19 +113,27 @@ export class ReplicateImageProvider implements ImageProviderAdapter {
     // configJson.input maps OUR field → Replicate field, e.g. { "image": "img_cond_path" }
     const imageKey = inputMap.image ?? modelDefaults.image ?? 'image';
     const promptKey = inputMap.prompt ?? modelDefaults.prompt ?? 'prompt';
-    if (imageDataUrl) predictionInput[imageKey] = imageDataUrl;
+    if (imageDataUrl)
+      predictionInput[imageKey] = modelDefaults.imageArray
+        ? [imageDataUrl]
+        : imageDataUrl;
     if (input.prompt) predictionInput[promptKey] = input.prompt;
 
     const versionFromConfig =
       typeof config.version === 'string' ? config.version : undefined;
 
-    const versionId = await this.resolveVersionId(
-      token,
-      variant.externalModel,
-      versionFromConfig,
-    );
-
-    const createRes = await fetch('https://api.replicate.com/v1/predictions', {
+    const official = Boolean(modelDefaults.imageArray) && !versionFromConfig;
+    const versionId = official
+      ? undefined
+      : await this.resolveVersionId(
+          token,
+          variant.externalModel,
+          versionFromConfig,
+        );
+    const endpoint = official
+      ? `https://api.replicate.com/v1/models/${variant.externalModel.split('/').map(encodeURIComponent).join('/')}/predictions`
+      : 'https://api.replicate.com/v1/predictions';
+    const createRes = await fetch(endpoint, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${token}`,
@@ -118,7 +141,7 @@ export class ReplicateImageProvider implements ImageProviderAdapter {
         Prefer: 'wait',
       },
       body: JSON.stringify({
-        version: versionId,
+        ...(versionId ? { version: versionId } : {}),
         input: predictionInput,
       }),
     });
