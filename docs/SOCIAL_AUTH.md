@@ -6,7 +6,7 @@ Google, GitHub, and Facebook are optional. No provider is enabled until its back
 
 1. Install existing dependencies and generate Prisma Client (`npm install`; postinstall runs Prisma generate).
 2. Apply the reviewed additive migration with `npm run db:migrate:deploy` during deployment. Migration: `20261107120000_social_auth`. Local implementation and tests do not apply this migration to any database.
-3. Configure `FRONTEND_URL=https://dlander.com` and `OAUTH_CALLBACK_BASE_URL=https://gateway.dlander.com` (origins only).
+3. Configure `FRONTEND_URL=https://dlander.com` and `OAUTH_CALLBACK_BASE_URL=https://mcp.dlander.com` (origins only).
 4. Configure client credentials for each desired provider; leave unused pairs blank:
 
 ```dotenv
@@ -21,9 +21,9 @@ FACEBOOK_GRAPH_API_VERSION=
 
 Facebook requires an explicit supported Graph API version from the Meta app dashboard. There is no silently chosen version. Existing mail transport configuration (SMTP or Resend) must be functional for local email verification. Register these exact redirect URIs in provider dashboards:
 
-- Google: `https://gateway.dlander.com/api/v1/auth/social/google/callback`
-- GitHub: `https://gateway.dlander.com/api/v1/auth/social/github/callback`
-- Facebook: `https://gateway.dlander.com/api/v1/auth/social/facebook/callback`
+- Google: `https://mcp.dlander.com/api/v1/auth/social/google/callback`
+- GitHub: `https://mcp.dlander.com/api/v1/auth/social/github/callback`
+- Facebook: `https://mcp.dlander.com/api/v1/auth/social/facebook/callback`
 
 For development use separate provider apps/redirect URLs with the local backend origin and local `FRONTEND_URL`; production callbacks deliberately do not redirect to arbitrary preview or localhost URLs.
 
