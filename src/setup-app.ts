@@ -1,3 +1,5 @@
+import { mcpAuthRouter } from '@modelcontextprotocol/sdk/server/auth/router.js';
+import { McpOAuthService, MCP_ACCOUNT_SCOPES } from './mcp/mcp-oauth.service';
 import { ValidationPipe } from '@nestjs/common';
 import type { CorsOptionsCallback } from '@nestjs/common/interfaces/external/cors-options.interface';
 import { ConfigService } from '@nestjs/config';
@@ -54,11 +56,15 @@ export function setupApplication(app: NestExpressApplication) {
     req: { url?: string },
     callback: CorsOptionsCallback,
   ) => {
-    const path = (req.url ?? '').split('?')[0];
+    const path = (req.url ?? '').split('?')[0].replace(/\/+$/, '') || '/';
     // Public, credential-free endpoints are called directly from web clients
     // (ChatGPT's connector setup, OAuth metadata discovery), so they must not
     // be pinned to the app's own origins.
-    const isPublic = path === '/mcp' || path.startsWith('/.well-known/');
+    const isPublic =
+      path === '/mcp' ||
+      path === '/mcp/account' ||
+      path.startsWith('/.well-known/') ||
+      ['/authorize', '/token', '/register', '/revoke'].includes(path);
     if (isPublic) {
       return callback(null, {
         origin: '*',
@@ -75,6 +81,22 @@ export function setupApplication(app: NestExpressApplication) {
     });
   };
   app.enableCors(corsDelegate);
+  if (config.get('MCP_ACCOUNT_ENABLED') === 'true') {
+    const provider = app.get(McpOAuthService);
+    app.use(
+      mcpAuthRouter({
+        provider,
+        issuerUrl: provider.issuer,
+        resourceServerUrl: provider.resource,
+        scopesSupported: MCP_ACCOUNT_SCOPES,
+        resourceName: 'dLander account',
+        serviceDocumentationUrl: new URL(
+          '/connect/ai',
+          config.getOrThrow<string>('FRONTEND_URL'),
+        ),
+      }),
+    );
+  }
   const swaggerConfig = new DocumentBuilder()
     .setTitle('Dlander API')
     .setDescription('Local development and integration API')

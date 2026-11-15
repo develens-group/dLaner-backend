@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import {
   BadRequestException,
+  ConflictException,
   Inject,
   Injectable,
   NotFoundException,
@@ -86,7 +87,12 @@ export class LandsService {
     return { id, deleted: true };
   }
 
-  async save(userId: string, landId: string, canvas: unknown) {
+  async save(
+    userId: string,
+    landId: string,
+    canvas: unknown,
+    expectedRevision?: number,
+  ) {
     await this.get(userId, landId);
     this.assertSafeJson(canvas);
     const body = Buffer.from(JSON.stringify(canvas), 'utf8');
@@ -126,6 +132,13 @@ export class LandsService {
           where: { landId },
           _max: { revision: true },
         });
+        if (
+          expectedRevision !== undefined &&
+          (aggregate._max.revision ?? 0) !== expectedRevision
+        )
+          throw new ConflictException(
+            'Land changed since it was read. Read the latest revision before saving.',
+          );
         const created = await tx.landRevision.create({
           data: {
             landId,

@@ -6,10 +6,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import {
-  Prisma,
-  WordPressEditSessionStatus,
-} from '@prisma/client';
+import { Prisma, WordPressEditSessionStatus } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import {
@@ -17,12 +14,13 @@ import {
   type ObjectStorageService,
 } from '../templates/template-storage';
 import type { ConnectedWordPressSite } from './wordpress-installation.service';
-import {
-  CompleteEditSessionDto,
-  CreateEditSessionDto,
-} from './wordpress.dto';
+import { CompleteEditSessionDto, CreateEditSessionDto } from './wordpress.dto';
 
-const problem = (code: string, message: string, status: 400 | 403 | 404 = 400) => {
+const problem = (
+  code: string,
+  message: string,
+  status: 400 | 403 | 404 = 400,
+) => {
   if (status === 404) return new NotFoundException({ code, message });
   if (status === 403) return new ForbiddenException({ code, message });
   return new BadRequestException({ code, message });
@@ -99,8 +97,13 @@ export class EditSessionService {
       );
     if (session.status !== WordPressEditSessionStatus.OPEN)
       throw problem('EDIT_SESSION_EXPIRED', 'Edit session is not open');
-    await this.prisma.wordPressEditSession.update({
-      where: { id: sessionId },
+    const completed = await this.prisma.wordPressEditSession.updateMany({
+      where: {
+        id: sessionId,
+        userId,
+        status: WordPressEditSessionStatus.OPEN,
+        expiresAt: { gt: new Date() },
+      },
       data: {
         status: WordPressEditSessionStatus.COMPLETED,
         outputText: dto.outputText,
@@ -108,6 +111,11 @@ export class EditSessionService {
         completedAt: new Date(),
       },
     });
+    if (completed.count !== 1)
+      throw problem(
+        'EDIT_SESSION_ALREADY_COMPLETED',
+        'Edit session changed or expired; read it again before completing',
+      );
     return this.view(sessionId);
   }
 

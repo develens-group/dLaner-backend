@@ -19,6 +19,9 @@ class Environment {
   @IsString() FACEBOOK_GRAPH_API_VERSION = '';
 
   @IsIn(['true', 'false']) MCP_ENABLED = 'false';
+  @IsIn(['true', 'false']) MCP_ACCOUNT_ENABLED = 'false';
+  @IsString() MCP_OAUTH_ISSUER_URL = '';
+  @IsString() MCP_OAUTH_SECRET_ENCRYPTION_KEY = '';
   @IsUrl({ require_tld: false }) MCP_EDITOR_URL = 'http://localhost:5173/land';
   @IsString() DATABASE_URL!: string;
   @IsString() JWT_ACCESS_SECRET!: string;
@@ -85,6 +88,27 @@ class Environment {
 
 export function validateEnvironment(values: Record<string, unknown>) {
   validateSocialEnvironment(values);
+  if (values.MCP_ACCOUNT_ENABLED === 'true') {
+    if (values.MCP_ENABLED !== 'true')
+      throw new Error('MCP_ACCOUNT_ENABLED requires MCP_ENABLED=true');
+    const issuer = new URL(String(values.MCP_OAUTH_ISSUER_URL || ''));
+    const local = ['localhost', '127.0.0.1', '[::1]'].includes(issuer.hostname);
+    if (
+      issuer.pathname !== '/' ||
+      issuer.search ||
+      issuer.hash ||
+      issuer.username ||
+      issuer.password ||
+      (issuer.protocol !== 'https:' && !(local && issuer.protocol === 'http:'))
+    )
+      throw new Error(
+        'MCP_OAUTH_ISSUER_URL must be an HTTPS origin (HTTP loopback allowed)',
+      );
+    if (String(values.MCP_OAUTH_SECRET_ENCRYPTION_KEY || '').length < 32)
+      throw new Error(
+        'MCP_OAUTH_SECRET_ENCRYPTION_KEY must contain at least 32 random characters',
+      );
+  }
   const numericKeys = [
     'PORT',
     'API_REQUEST_RETENTION_DAYS',

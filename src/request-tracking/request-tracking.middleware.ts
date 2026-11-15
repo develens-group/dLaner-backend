@@ -22,6 +22,9 @@ export class RequestTrackingMiddleware implements NestMiddleware {
   ) {}
   use(req: TrackedRequest, res: TrackedResponse, next: NextFunction) {
     if (
+      req.path === '/mcp/account' ||
+      req.path === '/mcp/account/' ||
+      req.path?.startsWith('/api/v1/mcp/oauth/') ||
       req.path === '/mcp' ||
       req.path === '/mcp/' ||
       req.path?.startsWith('/api/v1/mcp/designs/')

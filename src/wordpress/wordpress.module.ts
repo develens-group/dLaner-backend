@@ -28,6 +28,6 @@ import { WordPressService } from './wordpress.service';
     ConnectionRequestService,
     EditSessionService,
   ],
-  exports: [WordPressService, WordPressInstallationService],
+  exports: [WordPressService, WordPressInstallationService, EditSessionService],
 })
 export class WordPressModule {}
