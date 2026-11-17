@@ -32,14 +32,14 @@ export class McpAccountController {
     private readonly config: ConfigService,
   ) {}
 
-  @All('mcp/account')
+  @All('mcp')
   @Throttle({ default: { limit: 60, ttl: 60_000 } })
   async handle(@Req() req: Request, @Res() res: Response) {
     this.oauth.assertEnabled();
     this.mcp.assertEnabled();
     res.setHeader('Cache-Control', 'no-store');
     const metadata = new URL(
-      '/.well-known/oauth-protected-resource/mcp/account',
+      '/.well-known/oauth-protected-resource/mcp',
       this.oauth.issuer,
     ).href;
     const token = /^Bearer ([^\s]+)$/i.exec(

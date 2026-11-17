@@ -67,7 +67,7 @@ export class McpOAuthService implements OAuthServerProvider {
     return new URL(this.config.getOrThrow<string>('MCP_OAUTH_ISSUER_URL'));
   }
   get resource() {
-    return new URL('/mcp/account', this.issuer);
+    return new URL('/mcp', this.issuer);
   }
 
   private encrypt(value: string) {

@@ -114,7 +114,7 @@ function fixture() {
     { assertEnabled: () => {}, guide: async () => 'guide' } as never,
     config as never,
   );
-  app.all('/mcp/account', (req, res, next) => {
+  app.all('/mcp', (req, res, next) => {
     void account.handle(req, res).catch(next);
   });
   return { oauth, app, prisma, tables, lands, edits, values };
@@ -175,19 +175,17 @@ async function authorize(
 describe('account MCP OAuth (real SDK HTTP handlers, isolated persistence)', () => {
   it('advertises the account resource and challenges anonymous callers', async () => {
     const f = fixture();
+    await request(f.app).post('/mcp/account').send({}).expect(404);
     const metadata = await request(f.app)
-      .get('/.well-known/oauth-protected-resource/mcp/account')
+      .get('/.well-known/oauth-protected-resource/mcp')
       .expect(200);
     expect(metadata.body.resource).toBe(f.oauth.resource.href);
-    const denied = await request(f.app)
-      .post('/mcp/account')
-      .send({})
-      .expect(401);
+    const denied = await request(f.app).post('/mcp').send({}).expect(401);
     expect(denied.headers['www-authenticate']).toContain(
-      'oauth-protected-resource/mcp/account',
+      'oauth-protected-resource/mcp',
     );
     await request(f.app)
-      .post('/mcp/account')
+      .post('/mcp')
       .set('Authorization', 'Bearer ordinary-web-jwt')
       .send({})
       .expect(401);
@@ -195,6 +193,7 @@ describe('account MCP OAuth (real SDK HTTP handlers, isolated persistence)', () 
 
   it('rejects unsafe redirect schemes, PKCE mismatch and wrong audience without consuming a valid code', async () => {
     const f = fixture();
+    await request(f.app).post('/mcp/account').send({}).expect(404);
     await request(f.app)
       .post('/register')
       .send({
@@ -224,6 +223,7 @@ describe('account MCP OAuth (real SDK HTTP handlers, isolated persistence)', () 
 
   it('supports tokens across service instances, rotates refresh tokens and revokes the grant on replay', async () => {
     const f = fixture();
+    await request(f.app).post('/mcp/account').send({}).expect(404);
     const { data, client } = await authorize(f);
     const issued = await request(f.app)
       .post('/token')
@@ -263,6 +263,7 @@ describe('account MCP OAuth (real SDK HTTP handlers, isolated persistence)', () 
 
   it('reads only the token owner and refuses unconsented write tools', async () => {
     const f = fixture();
+    await request(f.app).post('/mcp/account').send({}).expect(404);
     const { data } = await authorize(f, 'lands:read');
     const issued = await request(f.app)
       .post('/token')
@@ -271,7 +272,7 @@ describe('account MCP OAuth (real SDK HTTP handlers, isolated persistence)', () 
       .expect(200);
     const call = (name: string, args: object) =>
       request(f.app)
-        .post('/mcp/account')
+        .post('/mcp')
         .set('Authorization', `Bearer ${issued.body.access_token}`)
         .set('Accept', 'application/json, text/event-stream')
         .send({
@@ -294,6 +295,7 @@ describe('account MCP OAuth (real SDK HTTP handlers, isolated persistence)', () 
 
   it('denies another owner’s WordPress site and limits calls to explicitly selected sites', async () => {
     const f = fixture();
+    await request(f.app).post('/mcp/account').send({}).expect(404);
     const { data } = await authorize(f, 'wordpress:read wordpress:write');
     const issued = await request(f.app)
       .post('/token')
@@ -304,7 +306,7 @@ describe('account MCP OAuth (real SDK HTTP handlers, isolated persistence)', () 
       findFirst: jest.fn(async () => ({ wordpressSiteId: 'other-site' })),
     };
     const denied = await request(f.app)
-      .post('/mcp/account')
+      .post('/mcp')
       .set('Authorization', `Bearer ${issued.body.access_token}`)
       .send({
         jsonrpc: '2.0',
@@ -333,6 +335,7 @@ describe('account MCP OAuth (real SDK HTTP handlers, isolated persistence)', () 
 
   it('denies disabled accounts and supports user-owned revocation', async () => {
     const f = fixture();
+    await request(f.app).post('/mcp/account').send({}).expect(404);
     const { data } = await authorize(f);
     const issued = await request(f.app)
       .post('/token')
@@ -355,6 +358,7 @@ describe('account MCP OAuth (real SDK HTTP handlers, isolated persistence)', () 
 
   it('encrypts confidential client secrets at rest', async () => {
     const f = fixture();
+    await request(f.app).post('/mcp/account').send({}).expect(404);
     const client = await request(f.app)
       .post('/register')
       .send({
@@ -397,6 +401,7 @@ describe('OAuth consent boundaries', () => {
 
   it('refuses scope escalation, denies an authorization request and never creates a grant for denial', async () => {
     const f = fixture();
+    await request(f.app).post('/mcp/account').send({}).expect(404);
     const token = await pending(f, 'lands:read');
     await expect(
       f.oauth.decide(token, 'owner', true, ['lands:read', 'lands:write'], []),
@@ -414,6 +419,7 @@ describe('OAuth consent boundaries', () => {
 
   it('rejects a foreign or disconnected WordPress site before consuming consent', async () => {
     const f = fixture();
+    await request(f.app).post('/mcp/account').send({}).expect(404);
     const token = await pending(f, 'wordpress:read');
     await expect(
       f.oauth.decide(
@@ -433,6 +439,7 @@ describe('OAuth consent boundaries', () => {
 
   it('binds authorization codes to their client and tokens to the original resource', async () => {
     const f = fixture();
+    await request(f.app).post('/mcp/account').send({}).expect(404);
     const { data } = await authorize(f);
     const other = await request(f.app)
       .post('/register')

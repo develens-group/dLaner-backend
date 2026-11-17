@@ -4,12 +4,11 @@ import { McpOAuthService } from './mcp-oauth.service';
 import { McpOAuthController } from './mcp-oauth.controller';
 import { McpAccountController } from './mcp-account.controller';
 import { Module } from '@nestjs/common';
-import { McpController } from './mcp.controller';
 import { McpService } from './mcp.service';
 
 @Module({
   imports: [LandsModule, WordPressModule],
-  controllers: [McpController, McpOAuthController, McpAccountController],
+  controllers: [McpOAuthController, McpAccountController],
   providers: [McpService, McpOAuthService],
   exports: [McpService, McpOAuthService],
 })
