@@ -1,3 +1,4 @@
+import { chooseLandTitle } from './land-title';
 import { createHash, randomUUID } from 'node:crypto';
 import {
   BadRequestException,
@@ -25,8 +26,18 @@ export class LandsService {
   ) {}
 
   async create(userId: string, dto: CreateLandDto) {
-    const land = await this.prisma.land.create({
-      data: { ownerId: userId, title: dto.title.trim() },
+    const land = await this.prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`land-titles:${userId}`}, 0))`;
+      const existing = await tx.land.findMany({
+        where: { ownerId: userId, deletedAt: null },
+        select: { title: true },
+      });
+      const title = chooseLandTitle(
+        dto.title,
+        existing.map((land) => land.title),
+        true,
+      );
+      return tx.land.create({ data: { ownerId: userId, title } });
     });
     if (dto.canvas) await this.save(userId, land.id, dto.canvas);
     return this.get(userId, land.id);
@@ -72,9 +83,17 @@ export class LandsService {
 
   async update(userId: string, id: string, dto: UpdateLandDto) {
     await this.get(userId, id);
-    return this.prisma.land.update({
-      where: { id },
-      data: { title: dto.title.trim() },
+    return this.prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`land-titles:${userId}`}, 0))`;
+      const existing = await tx.land.findMany({
+        where: { ownerId: userId, deletedAt: null, id: { not: id } },
+        select: { title: true },
+      });
+      const title = chooseLandTitle(
+        dto.title,
+        existing.map((land) => land.title),
+      );
+      return tx.land.update({ where: { id }, data: { title } });
     });
   }
 
