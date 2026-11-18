@@ -1,3 +1,4 @@
+import { changedElementIds } from './mcp-focus';
 import { All, Controller, HttpException, Req, Res } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Throttle } from '@nestjs/throttler';
@@ -136,12 +137,16 @@ export class McpAccountController {
       );
     };
     const userId = identity.userId;
-    const openUrl = (landId: string) => {
+    const openUrl = (landId: string, focusIds?: string[]) => {
       const url = new URL(
         '/land',
         this.config.getOrThrow<string>('FRONTEND_URL'),
       );
       url.searchParams.set('landId', landId);
+      if (focusIds?.length)
+        url.hash = new URLSearchParams({
+          mcpFocus: JSON.stringify(focusIds),
+        }).toString();
       return url.href;
     };
     register(
@@ -225,14 +230,21 @@ export class McpAccountController {
     register(
       'save_land',
       'lands:write',
-      'Save the complete revised canvas as a new revision of an owned land. Read first; preserve unrelated content and all files. expectedRevision prevents overwriting newer work.',
+      'Save the complete revised canvas as a new revision of an owned land. Read first; preserve unrelated content and all files. expectedRevision prevents overwriting newer work. Optionally set focusElementIds to the design elements the user should see. Return the resulting openUrl unchanged so the editor focuses the edited design.',
       {
         landId: id,
         expectedRevision: z.number().int().nonnegative(),
+        focusElementIds: z.array(z.string().min(1).max(128)).max(50).optional(),
         canvas: z.record(z.unknown()),
       },
       false,
       async (args) => {
+        const before = await readCanvas(args.landId as string);
+        const focusElementIds = changedElementIds(
+          before.canvas,
+          args.canvas,
+          args.focusElementIds as string[] | undefined,
+        );
         const revision = await this.lands.save(
           userId,
           args.landId as string,
@@ -242,7 +254,8 @@ export class McpAccountController {
         return {
           landId: args.landId,
           revision: revision.revision,
-          openUrl: openUrl(args.landId as string),
+          focusElementIds,
+          openUrl: openUrl(args.landId as string, focusElementIds),
         };
       },
     );
