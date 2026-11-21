@@ -1,3 +1,5 @@
+import { WordPressContentService } from './wordpress-content.service';
+import { WordPressContentController } from './wordpress-content.controller';
 import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
 import { TemplatesModule } from '../templates/templates.module';
@@ -16,11 +18,13 @@ import { WordPressService } from './wordpress.service';
 @Module({
   imports: [AuthModule, TemplatesModule],
   controllers: [
+    WordPressContentController,
     WordPressController,
     ConnectionRequestController,
     EditSessionController,
   ],
   providers: [
+    WordPressContentService,
     WordPressService,
     WordPressInstallationService,
     WordPressInstallationGuard,
@@ -28,6 +32,11 @@ import { WordPressService } from './wordpress.service';
     ConnectionRequestService,
     EditSessionService,
   ],
-  exports: [WordPressService, WordPressInstallationService, EditSessionService],
+  exports: [
+    WordPressService,
+    WordPressInstallationService,
+    EditSessionService,
+    WordPressContentService,
+  ],
 })
 export class WordPressModule {}

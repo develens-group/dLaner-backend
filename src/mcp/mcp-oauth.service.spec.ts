@@ -1,3 +1,4 @@
+import { WordPressContentService } from '../wordpress/wordpress-content.service';
 /* Test-only dynamic Prisma emulator and raw supertest JSON responses.
  * Production provider/controller files remain fully type-checked by ESLint. */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-call, @typescript-eslint/require-await */
@@ -70,10 +71,16 @@ function fixture() {
   prisma.user = { findUnique: jest.fn(async () => ({ status: 'ACTIVE' })) };
   prisma.wordPressSite = {
     findMany: jest.fn(async () => [
-      { id: 'my-site', name: 'My site', domain: 'example.com' },
+      {
+        id: '11111111-1111-4111-8111-111111111111',
+        name: 'My site',
+        domain: 'example.com',
+      },
     ]),
     count: jest.fn(async ({ where }) =>
-      where.id.in.every((id: string) => id === 'my-site')
+      where.id.in.every(
+        (id: string) => id === '11111111-1111-4111-8111-111111111111',
+      )
         ? where.id.in.length
         : 0,
     ),
@@ -104,6 +111,7 @@ function fixture() {
     list: jest.fn(async () => ({ items: [], pagination: {} })),
     get: jest.fn(),
     save: jest.fn(),
+    create: jest.fn(),
   };
   const edits = { getForWeb: jest.fn(), complete: jest.fn() };
   const account = new McpAccountController(
@@ -113,6 +121,7 @@ function fixture() {
     edits as never,
     { assertEnabled: () => {}, guide: async () => 'guide' } as never,
     config as never,
+    new WordPressContentService(prisma as never),
   );
   app.all('/mcp', (req, res, next) => {
     void account.handle(req, res).catch(next);
@@ -157,7 +166,9 @@ async function authorize(
     'owner',
     true,
     scopes.split(' '),
-    scopes.includes('wordpress:') ? ['my-site'] : [],
+    scopes.includes('wordpress:')
+      ? ['11111111-1111-4111-8111-111111111111']
+      : [],
   );
   const callback = new URL(decision.redirectUrl);
   expect(callback.searchParams.get('state')).toBe('preserved-state');
@@ -328,7 +339,7 @@ describe('account MCP OAuth (real SDK HTTP handlers, isolated persistence)', () 
         'other-user',
         true,
         ['wordpress:read'],
-        ['my-site'],
+        ['11111111-1111-4111-8111-111111111111'],
       ),
     ).rejects.toThrow();
   });
@@ -431,9 +442,15 @@ describe('OAuth consent boundaries', () => {
       ),
     ).rejects.toThrow();
     expect(f.tables.mcpOAuthGrant.size).toBe(0);
-    await f.oauth.decide(token, 'owner', true, ['wordpress:read'], ['my-site']);
+    await f.oauth.decide(
+      token,
+      'owner',
+      true,
+      ['wordpress:read'],
+      ['11111111-1111-4111-8111-111111111111'],
+    );
     expect([...f.tables.mcpOAuthGrant.values()][0].siteIds).toEqual([
-      'my-site',
+      '11111111-1111-4111-8111-111111111111',
     ]);
   });
 
@@ -462,5 +479,101 @@ describe('OAuth consent boundaries', () => {
     await expect(
       f.oauth.verifyAccessToken(issued.body.access_token),
     ).rejects.toThrow();
+  });
+});
+
+describe('WordPress MCP land-only workflow', () => {
+  const siteId = '11111111-1111-4111-8111-111111111111';
+  const itemId = '22222222-2222-4222-8222-222222222222';
+  const landId = '33333333-3333-4333-8333-333333333333';
+  const snapshotId = '44444444-4444-4444-8444-444444444444';
+  it('does not expose WordPress writeback tools and requires land-write permission', async () => {
+    const f = fixture();
+    const { data } = await authorize(f, 'wordpress:read');
+    const issued = await request(f.app)
+      .post('/token')
+      .type('form')
+      .send(data)
+      .expect(200);
+    const call = (method: string, params: object = {}) =>
+      request(f.app)
+        .post('/mcp')
+        .set('Authorization', `Bearer ${issued.body.access_token}`)
+        .send({ jsonrpc: '2.0', id: 1, method, params });
+    const tools = await call('tools/list').expect(200);
+    const names = tools.body.result.tools.map(
+      (tool: { name: string }) => tool.name,
+    );
+    expect(names).toContain('save_wordpress_land');
+    expect(names).not.toContain('create_wordpress_edit');
+    expect(names).not.toContain('complete_wordpress_edit');
+    const result = await call('tools/call', {
+      name: 'save_wordpress_land',
+      arguments: {
+        siteId,
+        title: 'Draft',
+        sourceItemIds: [itemId],
+        canvas: { elements: [] },
+      },
+    }).expect(200);
+    expect(result.body.result.isError).toBe(true);
+    expect(f.lands.create).not.toHaveBeenCalled();
+  });
+  it('creates an owned land from an explicitly allowed source without completing plugin edits', async () => {
+    const f = fixture();
+    const { data } = await authorize(
+      f,
+      'wordpress:read lands:read lands:write',
+    );
+    const issued = await request(f.app)
+      .post('/token')
+      .type('form')
+      .send(data)
+      .expect(200);
+    f.prisma.wordPressSite.findFirst = jest.fn().mockResolvedValue({
+      id: siteId,
+      userId: 'owner',
+      enabled: true,
+      contentSnapshotId: snapshotId,
+    });
+    f.prisma.wordPressContentItem = {
+      findFirst: jest.fn().mockResolvedValue({
+        id: itemId,
+        snapshotId,
+        title: 'Home',
+        payload: { title: 'Home' },
+      }),
+    };
+    f.lands.create.mockResolvedValue({ id: landId, title: 'Draft' });
+    const canvas = {
+      elements: [{ id: 'heading', type: 'text', text: 'Revised title' }],
+    };
+    const result = await request(f.app)
+      .post('/mcp')
+      .set('Authorization', `Bearer ${issued.body.access_token}`)
+      .send({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'tools/call',
+        params: {
+          name: 'save_wordpress_land',
+          arguments: {
+            siteId,
+            title: 'Draft',
+            sourceItemIds: [itemId],
+            canvas,
+          },
+        },
+      })
+      .expect(200);
+    expect(result.body.result.isError).not.toBe(true);
+    const output = JSON.parse(result.body.result.content[0].text);
+    expect(output.publishedToWordPress).toBe(false);
+    expect(output.landId).toBe(landId);
+    expect(f.lands.create).toHaveBeenCalledWith('owner', {
+      title: 'Draft',
+      canvas,
+    });
+    expect(f.edits.complete).not.toHaveBeenCalled();
   });
 });

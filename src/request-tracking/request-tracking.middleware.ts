@@ -25,6 +25,9 @@ export class RequestTrackingMiddleware implements NestMiddleware {
       req.path === '/mcp/account' ||
       req.path === '/mcp/account/' ||
       req.path?.startsWith('/api/v1/mcp/oauth/') ||
+      req.path?.startsWith('/api/v1/wordpress/content-sync') ||
+      (req.path?.startsWith('/api/v1/users/me/wordpress-sites/') &&
+        req.path.includes('/content-sync')) ||
       req.path === '/mcp' ||
       req.path === '/mcp/' ||
       req.path?.startsWith('/api/v1/mcp/designs/')

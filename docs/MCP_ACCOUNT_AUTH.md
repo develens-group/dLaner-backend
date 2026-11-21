@@ -56,7 +56,8 @@ Anonymous calls to `/mcp` must return 401 and a `WWW-Authenticate` discovery cha
 | `list_lands`, `get_land` | `lands:read` |
 | `save_land` | `lands:write` plus `lands:read` |
 | `list_wordpress_sites`, `list_wordpress_edits`, `get_wordpress_edit` | `wordpress:read` |
-| `create_wordpress_edit`, `complete_wordpress_edit` | `wordpress:write` plus `wordpress:read` |
+| `get_wordpress_site_content`, `list_wordpress_content`, `get_wordpress_content` | `wordpress:read` |
+| `save_wordpress_land` | `wordpress:read` plus `lands:write` |
 
 Only saved server content is available. Reopen an already open land to see the assistant's result; avoid editing a stale copy while the assistant is working. Saves create normal revisions and enforce existing storage quotas. Connections expire after 30 days, access tokens last at most one hour, refresh tokens rotate and replay revokes the grant. Run `retention:cleanup` regularly.
 
@@ -67,3 +68,7 @@ Connect the installed plugin to the dLander account first using the existing ins
 The plugin creates `POST /api/v1/wordpress/edit-sessions` with `X-Dlander-Installation-Key` and `X-Dlander-Site-Url`. The assistant reads and completes the allowed session. The plugin retrieves `GET /api/v1/wordpress/edit-sessions/:id/result` with its own installation headers, then reviews/applies the result. The assistant can also prepare a session and return its ID for the plugin to consume.
 
 This repository has no WordPress PHP plugin or direct post-publishing implementation. Completing an MCP session alone does not change a WordPress post.
+
+## Current WordPress snapshot workflow
+
+The synchronized site-content workflow now sends MCP proposals only to lands. MCP no longer exposes `create_wordpress_edit` or `complete_wordpress_edit`. The manual installation/editor APIs described above remain available to the user. See [WordPress content synchronization](WORDPRESS_CONTENT_SYNC.md) for the host-to-frontend JSON/message contract, snapshot APIs and deployment migration.
