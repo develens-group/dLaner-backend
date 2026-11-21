@@ -151,6 +151,7 @@ export class McpAccountController {
         this.config.getOrThrow<string>('FRONTEND_URL'),
       );
       url.searchParams.set('landId', landId);
+      url.searchParams.set('mcpAccount', userId);
       if (focusIds?.length)
         url.hash = new URLSearchParams({
           mcpFocus: JSON.stringify(focusIds),
