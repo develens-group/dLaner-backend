@@ -1,3 +1,4 @@
+import { McpPromptController } from './mcp-prompt.controller';
 import { LandsModule } from '../lands/lands.module';
 import { WordPressModule } from '../wordpress/wordpress.module';
 import { McpOAuthService } from './mcp-oauth.service';
@@ -8,7 +9,7 @@ import { McpService } from './mcp.service';
 
 @Module({
   imports: [LandsModule, WordPressModule],
-  controllers: [McpOAuthController, McpAccountController],
+  controllers: [McpOAuthController, McpAccountController, McpPromptController],
   providers: [McpService, McpOAuthService],
   exports: [McpService, McpOAuthService],
 })

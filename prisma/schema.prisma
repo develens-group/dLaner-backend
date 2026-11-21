@@ -1037,3 +1037,13 @@ model McpOAuthToken {
   @@index([grantId])
   @@index([expiresAt])
 }
+
+model McpPromptVersion {
+  id          Int      @id @default(autoincrement())
+  fileName    String   @db.VarChar(200)
+  content     String
+  contentHash String   @db.VarChar(64)
+  sizeBytes   Int
+  createdById String   @db.Uuid
+  createdAt   DateTime @default(now())
+}
