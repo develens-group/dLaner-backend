@@ -1,3 +1,5 @@
+import { LandImagesService } from '../lands/land-images.service';
+import { imageMetadataCanvas, preserveLandImageFiles } from './mcp-land-images';
 import { WordPressContentService } from '../wordpress/wordpress-content.service';
 import { changedElementIds } from './mcp-focus';
 import { All, Controller, HttpException, Req, Res } from '@nestjs/common';
@@ -33,6 +35,7 @@ export class McpAccountController {
     private readonly mcp: McpService,
     private readonly config: ConfigService,
     private readonly content: WordPressContentService,
+    private readonly images: LandImagesService,
   ) {}
 
   @All('mcp')
@@ -89,6 +92,8 @@ export class McpAccountController {
       schema: z.ZodRawShape,
       readOnly: boolean,
       run: (args: Record<string, unknown>) => Promise<unknown>,
+      nativeContent = false,
+      fileParams?: string[],
     ) => {
       const requiredScopes =
         typeof scope === 'string' ? [scope] : (scope ?? []);
@@ -98,6 +103,7 @@ export class McpAccountController {
           description,
           inputSchema: schema,
           _meta: {
+            ...(fileParams ? { 'openai/fileParams': fileParams } : {}),
             securitySchemes: [{ type: 'oauth2', scopes: requiredScopes }],
           },
           annotations: {
@@ -130,7 +136,10 @@ export class McpAccountController {
                   ],
                 },
               };
-            return text(await run(args));
+            const result = await run(args);
+            return nativeContent
+              ? (result as ReturnType<typeof text>)
+              : text(result);
           } catch (error) {
             const message =
               error instanceof HttpException && error.getStatus() < 500
@@ -166,13 +175,13 @@ export class McpAccountController {
       true,
       () =>
         this.mcp.accountGuide(
-          'Use list_lands to find a land, then get_land to read its full editor canvas and saved revision. Edit only the requested content. Preserve all unrelated elements, files, images, frame IDs, bindings, appState and document fields. Text edits must update text and originalText consistently. Increment changed element version and updated timestamps so the editor recognizes edits. Call save_land with the complete revised canvas and expectedRevision from get_land. On conflict read the latest canvas and reconcile; never retry blindly. Account lands are permanent normal saved revisions, not anonymous 24-hour designs. Read synchronized WordPress content using the selected-site tools and save proposals with save_wordpress_land. Do not complete or publish WordPress editing sessions; output stays in a land for manual transfer.',
+          'Use list_lands to find a land, then get_land to read its full editor canvas and saved revision. Edit only the requested content. Use get_land_image to visually inspect saved images. To edit a picture, use your own image editor, then call import_land_image with the resulting actual file and sourceElementId to append it beside the original in the same land. Do not change the original. Use add_land_image only for small inline images. Account tools support embedded images; ignore vector-only restrictions from the anonymous create_design transport. Preserve all unrelated elements, files, images, frame IDs, bindings, appState and document fields. Text edits must update text and originalText consistently. Increment changed element version and updated timestamps so the editor recognizes edits. Call save_land with the complete revised canvas and expectedRevision from get_land. On conflict read the latest canvas and reconcile; never retry blindly. Account lands are permanent normal saved revisions, not anonymous 24-hour designs. Read synchronized WordPress content using the selected-site tools and save proposals with save_wordpress_land. Do not complete or publish WordPress editing sessions; output stays in a land for manual transfer.',
         ),
     );
     register(
       'list_lands',
       'lands:read',
-      'List this account’s saved lands with pagination. Does not include unsaved editor changes.',
+      'List this accountâ€™s saved lands with pagination. Does not include unsaved editor changes.',
       {
         page: z.number().int().min(1).default(1),
         limit: z.number().int().min(1).max(50).default(20),
@@ -222,7 +231,7 @@ export class McpAccountController {
     register(
       'get_land',
       'lands:read',
-      'Read one owned land and its complete saved canvas. Keep its revision for save_land.',
+      'Read one owned land and its complete saved canvas. Keep its revision for save_land. Image file metadata is returned without base64 to avoid overflowing the conversation. save_land preserves existing image bytes automatically; use get_land_image with each image fileId to inspect it, and add_land_image to attach real image bytes.',
       { landId: id },
       true,
       async (args) => {
@@ -231,10 +240,110 @@ export class McpAccountController {
           id: result.land.id,
           title: result.land.title,
           revision: result.revision,
-          canvas: result.canvas,
+          canvas: imageMetadataCanvas(result.canvas),
           openUrl: openUrl(result.land.id),
         };
       },
+    );
+    register(
+      'get_land_image',
+      'lands:read',
+      'Visually read one saved image as native MCP image content. First get_land to find image fileIds. Local browser-only images must first be re-saved from their original browser. Remote URLs are not fetched.',
+      { landId: id, fileId: z.string().min(1).max(128) },
+      true,
+      async (args) => {
+        const image = await this.images.visual(
+          userId,
+          args.landId as string,
+          args.fileId as string,
+        );
+        return {
+          content: [
+            {
+              type: 'text' as const,
+              text: JSON.stringify({
+                landId: args.landId,
+                fileId: args.fileId,
+                revision: image.revision,
+                ...('originalDownloadUrl' in image
+                  ? {
+                      originalDownloadUrl: image.originalDownloadUrl,
+                      expiresIn: 300,
+                    }
+                  : {}),
+              }),
+            },
+            {
+              type: 'image' as const,
+              data: image.data,
+              mimeType: image.mimeType,
+            },
+          ],
+        };
+      },
+      true,
+    );
+    register(
+      'add_land_image',
+      'lands:write',
+      'Append an actual image to an owned land, preserving all other elements and files. Supply embedded image bytes as dataURL (PNG/JPEG/WebP/GIF, max 1 MB), never a local path or invented URL. Requires current expectedRevision. If image bytes are unavailable, explain that an upload is required; do not invent base64.',
+      {
+        landId: id,
+        expectedRevision: z.number().int().nonnegative(),
+        dataURL: z.string().max(1_400_000),
+        x: z.number().finite(),
+        y: z.number().finite(),
+        width: z.number().positive().max(20000),
+        height: z.number().positive().max(20000),
+      },
+      false,
+      async (args) => {
+        const added = await this.images.import(
+          userId,
+          args as unknown as import('../lands/land-images.service').AssistantImageInput,
+        );
+        return {
+          landId: args.landId,
+          ...added,
+          openUrl: openUrl(args.landId as string, [added.elementId]),
+        };
+      },
+    );
+    register(
+      'import_land_image',
+      'lands:write',
+      'Save an image file generated or edited by your own image tool as a NEW image in the SAME land, preserving the original. Pass the actual file using the file parameter; ChatGPT provides its temporary download_url. Do not send sandbox/local paths or fabricate file references. Use sourceElementId to automatically place the result beside the original; you may override its position and dimensions. Read get_land first and use expectedRevision. This tool does not generate/edit images and never charges AI credits. If your assistant cannot attach the generated file, ask the user to upload it; do not claim success.',
+      {
+        landId: id,
+        expectedRevision: z.number().int().nonnegative(),
+        file: z
+          .object({
+            download_url: z.string().url().max(8192),
+            file_id: z.string().min(1).max(512),
+            mime_type: z.string().max(128).optional(),
+            file_name: z.string().max(512).optional(),
+          })
+          .strict(),
+        sourceElementId: z.string().min(1).max(128).optional(),
+        x: z.number().finite().optional(),
+        y: z.number().finite().optional(),
+        width: z.number().positive().max(20000).optional(),
+        height: z.number().positive().max(20000).optional(),
+      },
+      false,
+      async (args) => {
+        const added = await this.images.import(
+          userId,
+          args as unknown as import('../lands/land-images.service').AssistantImageInput,
+        );
+        return {
+          landId: args.landId,
+          ...added,
+          openUrl: openUrl(args.landId as string, [added.elementId]),
+        };
+      },
+      false,
+      ['file'],
     );
     register(
       'save_land',
@@ -257,7 +366,10 @@ export class McpAccountController {
         const revision = await this.lands.save(
           userId,
           args.landId as string,
-          args.canvas,
+          preserveLandImageFiles(
+            before.canvas,
+            args.canvas as Record<string, unknown>,
+          ),
           args.expectedRevision as number,
         );
         return {

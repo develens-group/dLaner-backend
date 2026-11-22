@@ -222,6 +222,7 @@ model Land {
   owner             User           @relation("LandOwner", fields: [ownerId], references: [id], onDelete: Restrict)
   currentRevision   LandRevision?  @relation("CurrentLandRevision", fields: [currentRevisionId], references: [id], onDelete: SetNull)
   revisions         LandRevision[] @relation("LandRevisions")
+  images            LandImage[]
 
   @@index([ownerId, deletedAt, updatedAt])
 }
@@ -1080,4 +1081,20 @@ model WordPressContentItem {
 
   @@unique([snapshotId, kind, externalId])
   @@index([snapshotId, kind])
+}
+
+model LandImage {
+  id                String   @id @default(uuid()) @db.Uuid
+  landId            String   @db.Uuid
+  contentHash       String   @db.VarChar(64)
+  storageKey        String   @unique @db.VarChar(500)
+  mimeType          String   @db.VarChar(64)
+  sizeBytes         Int
+  previewStorageKey String?  @db.VarChar(500)
+  updatedAt         DateTime @updatedAt
+  createdAt         DateTime @default(now())
+  land              Land     @relation(fields: [landId], references: [id], onDelete: Cascade)
+
+  @@unique([landId, contentHash])
+  @@index([landId, createdAt])
 }

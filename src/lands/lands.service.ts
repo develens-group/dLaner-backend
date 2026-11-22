@@ -114,6 +114,39 @@ export class LandsService {
   ) {
     await this.get(userId, landId);
     this.assertSafeJson(canvas);
+    // Resolve only assets belonging to this land; never persist temporary URLs or hydrated bytes.
+    const document = canvas as Record<string, unknown>;
+    const files = (document.files ?? {}) as Record<
+      string,
+      Record<string, unknown>
+    >;
+    const external = Object.entries(files).filter(
+      ([, file]) => typeof file.landAssetId === 'string',
+    );
+    if (external.length) {
+      const assets = await this.prisma.landImage.findMany({
+        where: {
+          landId,
+          id: { in: external.map(([, file]) => file.landAssetId as string) },
+        },
+      });
+      const resolved = { ...files };
+      for (const [fileId, file] of external) {
+        const asset = assets.find((item) => item.id === file.landAssetId);
+        if (!asset)
+          throw new BadRequestException(
+            'Image asset does not belong to this land.',
+          );
+        resolved[fileId] = {
+          id: fileId,
+          landAssetId: asset.id,
+          mimeType: asset.mimeType,
+          created: asset.createdAt.getTime(),
+          sizeBytes: asset.sizeBytes,
+        };
+      }
+      canvas = { ...document, files: resolved };
+    }
     const body = Buffer.from(JSON.stringify(canvas), 'utf8');
     const maxBytes = this.config.get<number>('LAND_MAX_JSON_BYTES', 10_000_000);
     if (body.length > maxBytes)

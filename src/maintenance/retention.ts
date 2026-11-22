@@ -1,3 +1,4 @@
+import { LandImagesService } from '../lands/land-images.service';
 import { WordPressContentService } from '../wordpress/wordpress-content.service';
 import { SocialAuthService } from '../auth/social-auth.service';
 import { NestFactory } from '@nestjs/core';
@@ -13,6 +14,7 @@ async function cleanup() {
   const app = await NestFactory.createApplicationContext(AppModule);
   try {
     await app.get(WordPressContentService).cleanup();
+    await app.get(LandImagesService).cleanup();
     const social = await app.get(SocialAuthService).cleanup();
     const mcp = await app.get(McpService).cleanup();
     await app.get(McpOAuthService).cleanup();

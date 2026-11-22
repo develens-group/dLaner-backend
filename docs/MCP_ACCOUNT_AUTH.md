@@ -72,3 +72,31 @@ This repository has no WordPress PHP plugin or direct post-publishing implementa
 ## Current WordPress snapshot workflow
 
 The synchronized site-content workflow now sends MCP proposals only to lands. MCP no longer exposes `create_wordpress_edit` or `complete_wordpress_edit`. The manual installation/editor APIs described above remain available to the user. See [WordPress content synchronization](WORDPRESS_CONTENT_SYNC.md) for the host-to-frontend JSON/message contract, snapshot APIs and deployment migration.
+
+
+## Assistant-edited images in the same land
+
+Account MCP supports the following flow without calling a dLander image-generation provider:
+
+1. Read `get_land` and note the current revision plus the original image element ID/file ID.
+2. Call `get_land_image` to inspect that image. Bucket-backed images return a stored 768px preview as native MCP image content and a short-lived original download link.
+3. Use the assistant's own image editing tool to produce the requested result.
+4. Call `import_land_image` with `landId`, `expectedRevision`, `sourceElementId`, and the actual edited `file`. The descriptor includes `_meta["openai/fileParams"]: ["file"]`. ChatGPT supplies `{download_url,file_id,mime_type?,file_name?}`. Never invent references or pass `sandbox:` paths.
+5. The backend checks ownership, land-write scope, revision, image size/type/dimensions, and downloads the file using bounded HTTPS requests with DNS pinning and private-address/redirect checks.
+6. The original image stays unchanged. A new image element is appended beside it in the same land, and the returned editor link focuses that new element. Optional x/y/width/height override placement.
+
+`import_land_image` accepts files up to 8 MB, maximum 8192px per side / 20 megapixels. The legacy `add_land_image` accepts inline files up to 1 MB and now uses the same bucket persistence. Neither tool edits images itself or charges dLander AI credits. Native file transfer depends on the assistant/client: if it cannot provide its generated file, it must ask the user to attach it rather than claim the result was saved.
+
+Original bytes and a one-time PNG preview are private bucket objects. Identical images within a land reuse the stored asset. The database stores metadata and the JSON revision contains only `landAssetId`; it does not embed the new image bytes or an expiring URL. Normal user-uploaded/legacy inline images keep their existing storage behavior. Opening a land resolves owner-authorized, five-minute signed URLs and downloads directly from the bucket. Later editor saves strip hydrated bytes from bucket-backed files. Exported design files still include downloaded image bytes for portability.
+
+Both original and preview bytes count toward the owner's storage quota. Existing revision retention is respected. `npm.cmd run retention:cleanup` removes assets from deleted lands and assets unused by all retained revisions after a 24-hour grace period; run it on the existing maintenance schedule. Failed revision saves can leave a staged asset until that cleanup.
+
+### Deployment
+
+- Apply `npm.cmd run db:migrate:deploy` in the backend, then publish backend and frontend.
+- No new environment variables: this uses the existing `TEMPLATE_STORAGE_*` bucket configuration. Production must use the S3 driver, not ephemeral local storage.
+- The bucket must allow browser GET/HEAD requests from `https://dlander.com` through its CORS configuration (add localhost/preview origins only when needed). Keep the bucket private. Signed download URLs authorize only individual temporary reads.
+- Refresh/reconnect the assistant's MCP tool list to discover `import_land_image`; it requires `lands:write` and reading requires `lands:read`.
+- Smoke test in ChatGPT: ask it to read a saved car image, edit its color with its own editor, and append the edited file beside the original. Then reopen the land, save a text edit, reload and verify both images remain. This live assistant test is separate from local mocked transfer tests.
+
+Official file parameter contract: https://developers.openai.com/apps-sdk/reference/

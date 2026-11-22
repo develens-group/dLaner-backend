@@ -13,7 +13,7 @@ export class BillingStorageService {
     private readonly plans: BillingPlansService,
   ) {}
 
-  /** Bytes used by retained land revisions for non-deleted lands. */
+  /** Bytes used by retained revisions and original/preview image assets for active lands. */
   async usedBytes(userId: string): Promise<bigint> {
     const rows = await this.prisma.landRevision.aggregate({
       where: {
@@ -21,7 +21,13 @@ export class BillingStorageService {
       },
       _sum: { sizeBytes: true },
     });
-    return BigInt(rows._sum.sizeBytes ?? 0);
+    const images = await this.prisma.landImage.aggregate({
+      where: { land: { ownerId: userId, deletedAt: null } },
+      _sum: { sizeBytes: true },
+    });
+    return (
+      BigInt(rows._sum.sizeBytes ?? 0) + BigInt(images._sum.sizeBytes ?? 0)
+    );
   }
 
   async limitBytes(userId: string): Promise<bigint> {
@@ -59,7 +65,8 @@ export class BillingStorageService {
       });
     const used = await this.usedBytes(userId);
     const limit = await this.limitBytes(userId);
-    const next = used - BigInt(Math.max(0, replacingBytes)) + BigInt(additionalBytes);
+    const next =
+      used - BigInt(Math.max(0, replacingBytes)) + BigInt(additionalBytes);
     if (next > limit) {
       throw new ForbiddenException({
         code: 'STORAGE_QUOTA_EXCEEDED',

@@ -114,6 +114,7 @@ function fixture() {
     create: jest.fn(),
   };
   const edits = { getForWeb: jest.fn(), complete: jest.fn() };
+  const images = { import: jest.fn(), visual: jest.fn() };
   const account = new McpAccountController(
     oauth,
     lands as never,
@@ -122,11 +123,12 @@ function fixture() {
     { assertEnabled: () => {}, guide: async () => 'guide' } as never,
     config as never,
     new WordPressContentService(prisma as never),
+    images as never,
   );
   app.all('/mcp', (req, res, next) => {
     void account.handle(req, res).catch(next);
   });
-  return { oauth, app, prisma, tables, lands, edits, values };
+  return { oauth, app, prisma, tables, lands, edits, values, images };
 }
 
 async function authorize(
@@ -575,5 +577,82 @@ describe('WordPress MCP land-only workflow', () => {
       canvas,
     });
     expect(f.edits.complete).not.toHaveBeenCalled();
+  });
+});
+
+describe('assistant image file transfer', () => {
+  it('advertises the native file parameter and saves its result in the same land', async () => {
+    const f = fixture();
+    const { data } = await authorize(f);
+    const issued = await request(f.app)
+      .post('/token')
+      .type('form')
+      .send(data)
+      .expect(200);
+    const call = (method: string, params: object = {}) =>
+      request(f.app)
+        .post('/mcp')
+        .set('Authorization', `Bearer ${issued.body.access_token}`)
+        .send({ jsonrpc: '2.0', id: 1, method, params });
+    const tools = await call('tools/list').expect(200);
+    const tool = tools.body.result.tools.find(
+      (item: { name: string }) => item.name === 'import_land_image',
+    );
+    expect(tool._meta['openai/fileParams']).toEqual(['file']);
+    const args = {
+      landId: '33333333-3333-4333-8333-333333333333',
+      expectedRevision: 4,
+      sourceElementId: 'car',
+      file: {
+        download_url: 'https://files.example/car.png',
+        file_id: 'file-result',
+      },
+    };
+    f.images.import.mockResolvedValue({
+      elementId: 'new-car',
+      fileId: 'new-file',
+      assetId: 'asset',
+      revision: 5,
+    });
+    const saved = await call('tools/call', {
+      name: 'import_land_image',
+      arguments: args,
+    }).expect(200);
+    expect(saved.body.result.isError).not.toBe(true);
+    expect(f.images.import).toHaveBeenCalledWith('owner', args);
+    expect(JSON.parse(saved.body.result.content[0].text).openUrl).toContain(
+      args.landId,
+    );
+  });
+  it('does not accept image imports with read-only permission', async () => {
+    const f = fixture();
+    const { data } = await authorize(f, 'lands:read');
+    const issued = await request(f.app)
+      .post('/token')
+      .type('form')
+      .send(data)
+      .expect(200);
+    const result = await request(f.app)
+      .post('/mcp')
+      .set('Authorization', `Bearer ${issued.body.access_token}`)
+      .send({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'tools/call',
+        params: {
+          name: 'import_land_image',
+          arguments: {
+            landId: '33333333-3333-4333-8333-333333333333',
+            expectedRevision: 0,
+            file: {
+              download_url: 'https://files.example/a.png',
+              file_id: 'file-a',
+            },
+          },
+        },
+      })
+      .expect(200);
+    expect(result.body.result.isError).toBe(true);
+    expect(f.images.import).not.toHaveBeenCalled();
   });
 });
