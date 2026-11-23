@@ -147,3 +147,41 @@ export function preserveLandImageFiles(
   }
   return { ...next, files };
 }
+
+/** A small, explicit index keeps live images discoverable in large canvases. */
+export function landImageIndex(canvas: Record<string, unknown>) {
+  const elements = Array.isArray(canvas.elements)
+    ? (canvas.elements as Record<string, unknown>[])
+    : [];
+  const files = (canvas.files ?? {}) as Record<string, Record<string, unknown>>;
+  return elements
+    .filter((element) => element?.type === 'image' && !element.isDeleted)
+    .map((element) => {
+      const fileId = typeof element.fileId === 'string' ? element.fileId : null;
+      const file = fileId ? files[fileId] : undefined;
+      const storage =
+        typeof file?.landAssetId === 'string'
+          ? 'bucket_reference'
+          : typeof file?.dataURL === 'string' &&
+              file.dataURL.startsWith('data:image/')
+            ? 'embedded'
+            : 'missing_bytes';
+      return {
+        elementId: element.id,
+        fileId,
+        label: element.title ?? element.name ?? 'Image',
+        x: element.x,
+        y: element.y,
+        width: element.width,
+        height: element.height,
+        mimeType: file?.mimeType ?? null,
+        storage,
+        nextStep:
+          storage === 'missing_bytes'
+            ? 'Image bytes are missing from this saved revision. Re-save from the original browser, or attach the missing file.'
+            : 'Call get_land_image with this landId and fileId to see the actual image. Metadata alone does not reveal its contents.',
+      };
+    });
+}
+export const LAND_IMAGE_READ_INSTRUCTIONS =
+  'To identify or edit an image, call get_land_image for each candidate fileId before asking the user to upload it. list_land_images and get_land return metadata, not visual content. The native image block in get_land_image is the visual input. When using code/JavaScript tool orchestration, forward ImageContent blocks through the runtime image-display helper (for example image(block)); JSON.stringify or logging the result alone does not expose the picture for visual inspection. Never infer image content from names/status or claim it is unreadable without calling that tool. If the tool returns an error, report the actual error; if the client cannot expose a successful image block, explain that client limitation separately. For editing, use your own image editor then import_land_image to append the edited file beside the original.';

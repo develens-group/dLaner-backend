@@ -2,6 +2,7 @@ import {
   appendLandImage,
   decodeLandImage,
   imageFile,
+  landImageIndex,
   imageMetadataCanvas,
   preserveLandImageFiles,
 } from './mcp-land-images';
@@ -67,4 +68,34 @@ it('omits binary data from text context and retains it when metadata is saved', 
   expect(
     preserveLandImageFiles(before, { elements: [], files: {} }).files.a.dataURL,
   ).toBe(png);
+});
+
+it('indexes live images separately from deleted elements and never mistakes status for saved bytes', () => {
+  const canvas = {
+    elements: [
+      {
+        id: 'girl',
+        type: 'image',
+        fileId: 'photo',
+        status: 'error',
+        title: 'Girl',
+      },
+      { id: 'old', type: 'image', fileId: 'old', isDeleted: true },
+      { id: 'broken', type: 'image', fileId: 'missing', status: 'saved' },
+      { id: 'text', type: 'text' },
+    ],
+    files: { photo: { landAssetId: 'asset', mimeType: 'image/png' } },
+  };
+  const index = landImageIndex(canvas);
+  expect(index).toHaveLength(2);
+  expect(index[0]).toMatchObject({
+    elementId: 'girl',
+    fileId: 'photo',
+    storage: 'bucket_reference',
+  });
+  expect(index[1]).toMatchObject({
+    elementId: 'broken',
+    storage: 'missing_bytes',
+  });
+  expect(index[0].nextStep).toContain('get_land_image');
 });

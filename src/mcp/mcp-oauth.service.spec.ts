@@ -656,3 +656,50 @@ describe('assistant image file transfer', () => {
     expect(f.images.import).not.toHaveBeenCalled();
   });
 });
+
+describe('native image reading', () => {
+  it('returns an actual MCP image block rather than serializing the picture as text', async () => {
+    const f = fixture();
+    const { data } = await authorize(f, 'lands:read');
+    const issued = await request(f.app)
+      .post('/token')
+      .type('form')
+      .send(data)
+      .expect(200);
+    f.images.visual.mockResolvedValue({
+      mimeType: 'image/png',
+      data: 'iVBORw0KGgo=',
+      revision: 55,
+    });
+    const result = await request(f.app)
+      .post('/mcp')
+      .set('Authorization', `Bearer ${issued.body.access_token}`)
+      .send({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'tools/call',
+        params: {
+          name: 'get_land_image',
+          arguments: {
+            landId: '33333333-3333-4333-8333-333333333333',
+            fileId: 'girl',
+          },
+        },
+      })
+      .expect(200);
+    expect(result.body.result.isError).not.toBe(true);
+    expect(result.body.result.content).toContainEqual({
+      type: 'image',
+      data: 'iVBORw0KGgo=',
+      mimeType: 'image/png',
+    });
+    expect(
+      JSON.parse(result.body.result.content[0].text).imageContentAttached,
+    ).toBe(true);
+    expect(f.images.visual).toHaveBeenCalledWith(
+      'owner',
+      '33333333-3333-4333-8333-333333333333',
+      'girl',
+    );
+  });
+});
